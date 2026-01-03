@@ -1,0 +1,50 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function signedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Consultation documents - only doctors can upload, both can read
+    match /consultation_documents/{consultationId}/{fileName} {
+      // Allow read if user is part of the consultation
+      allow read: if signedIn() && (
+        resource.metadata.doctorId == request.auth.uid ||
+        resource.metadata.patientId == request.auth.uid
+      );
+      
+      // Only doctors can upload documents
+      allow write: if signedIn() && 
+        request.resource.metadata.uploadedBy == 'doctor';
+      
+      // Allow delete only by doctors who uploaded
+      allow delete: if signedIn() && 
+        resource.metadata.uploadedBy == 'doctor';
+    }
+    
+    // Medical reports - doctors only
+    match /medical_reports/{reportId}/{fileName} {
+      allow read: if signedIn() && (
+        resource.metadata.doctorId == request.auth.uid ||
+        resource.metadata.patientId == request.auth.uid
+      );
+      
+      allow write: if signedIn() && 
+        request.resource.metadata.doctorId == request.auth.uid;
+      
+      allow delete: if signedIn() && 
+        resource.metadata.doctorId == request.auth.uid;
+    }
+    
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

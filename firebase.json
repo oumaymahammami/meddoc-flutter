@@ -1,0 +1,37 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "meddoc-bfe57",
+          "appId": "1:221659583938:android:f71f9fa363e7a3acb3725b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "meddoc-bfe57",
+          "configurations": {
+            "android": "1:221659583938:android:f71f9fa363e7a3acb3725b",
+            "ios": "1:221659583938:ios:8448764e3cd0430fb3725b",
+            "macos": "1:221659583938:ios:8448764e3cd0430fb3725b",
+            "web": "1:221659583938:web:f8ed011bb622a546b3725b",
+            "windows": "1:221659583938:web:6fc3144674d513a8b3725b"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "eur3",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions"
+  }
+}

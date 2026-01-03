@@ -1,0 +1,235 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+
+    function role() {
+      return signedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdmin() { return signedIn() && role() == 'admin'; } // still exists but not used for doctors
+    function isDoctor() { return signedIn() && role() == 'doctor'; }
+    function isPatient() { return signedIn() && role() == 'patient'; }
+
+    // ---------- USERS ----------
+    match /users/{uid} {
+      // Allow doctors to read user docs (needed to display patient names)
+      allow read: if isSelf(uid) || isDoctor();
+      // Allow anyone to create their own user document during registration
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if isSelf(uid);
+      allow delete: if false;
+    }
+
+    // ---------- PATIENTS ----------
+    match /patients/{uid} {
+      allow read, create, update: if isSelf(uid) && isPatient();
+      allow delete: if false;
+    }
+
+    // ---------- SPECIALTIES ----------
+    match /specialties/{specId} {
+      allow read: if signedIn();
+      allow write: if false; // ❌ nobody can write specialties now
+    }
+
+    // ---------- DOCTORS ----------
+    match /doctors/{doctorId} {
+      allow read: if signedIn();
+
+      // Allow creating doctor profile during registration
+      allow create: if signedIn() && request.auth.uid == doctorId;
+
+      // Allow updating own doctor document
+      allow update: if signedIn() && request.auth.uid == doctorId;
+
+      // Allow updating only averageRating and reviewCount fields (for review system)
+      allow update: if signedIn() 
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating', 'reviewCount']);
+
+      allow delete: if false;
+    }
+
+    // ---------- REVIEWS ----------
+    match /doctors/{doctorId}/reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isPatient() && request.resource.data.patientId == request.auth.uid;
+      allow update, delete: if isPatient() && resource.data.patientId == request.auth.uid;
+    }
+
+    // ---------- SLOTS ----------
+    // Doctors manage their own availability slots
+    match /doctors/{doctorId}/slots/{slotId} {
+      allow read: if signedIn();
+      
+      // Doctors have full control over their slots
+      allow create, delete: if isDoctor() && request.auth.uid == doctorId;
+      allow update: if isDoctor() && request.auth.uid == doctorId;
+      
+      // Patients can book an AVAILABLE slot (change status to BOOKED and set their patientId)
+      allow update: if signedIn()
+        && resource.data.status == 'AVAILABLE'
+        && request.resource.data.status == 'BOOKED'
+        && request.resource.data.patientId == request.auth.uid;
+        
+      // Patients can release their own BOOKED slot (change status back to AVAILABLE)
+      allow update: if signedIn()
+        && resource.data.patientId == request.auth.uid
+        && resource.data.status == 'BOOKED'
+        && request.resource.data.status == 'AVAILABLE';
+    }
+
+    // ---------- DOCTOR-PATIENT LINKS ----------
+    // Doctors' list of patients
+    match /doctorPatients/{doctorId}/patients/{patientId} {
+      allow read: if request.auth != null
+               && (request.auth.uid == doctorId || request.auth.uid == patientId);
+      allow write: if request.auth != null
+                 && (request.auth.uid == patientId || request.auth.uid == doctorId);
+    }
+
+    // Patients' list of doctors
+    match /patientDoctors/{patientId}/doctors/{doctorId} {
+      allow read: if request.auth != null
+               && (request.auth.uid == patientId || request.auth.uid == doctorId);
+      allow write: if request.auth != null
+               && (request.auth.uid == patientId || request.auth.uid == doctorId);
+    }
+
+    // ---------- DOCTOR NOTES ON PATIENTS ----------
+    match /doctorPatients/{doctorId}/patients/{patientId}/notes/{noteId} {
+      allow read, create, update, delete: if request.auth != null
+        && request.auth.uid == doctorId;
+    }
+
+    // ---------- MEDICATIONS PRESCRIBED BY DOCTORS ----------
+    match /doctorPatients/{doctorId}/patients/{patientId}/medications/{medicationId} {
+      // Doctors can manage medications for their patients
+      allow read, create, update, delete: if request.auth != null
+        && request.auth.uid == doctorId;
+      // Patients can read their own medications
+      allow read: if request.auth != null && request.auth.uid == patientId;
+    }
+
+    // ---------- APPOINTMENTS ----------
+    match /appointments/{appointmentId} {
+      allow read: if (signedIn() && resource.data.patientId == request.auth.uid)
+               || (isDoctor() && resource.data.doctorId == request.auth.uid);
+
+      allow create: if signedIn() && request.resource.data.patientId == request.auth.uid;
+
+      allow update: if (signedIn() && resource.data.patientId == request.auth.uid)
+                 || (isDoctor() && resource.data.doctorId == request.auth.uid);
+
+      allow delete: if signedIn() && resource.data.patientId == request.auth.uid;
+    }
+
+    // ---------- MEDICAL REPORTS ----------
+    match /medicalReports/{reportId} {
+      // Doctors can read/write reports for their patients
+      allow read, create, update, delete: if isDoctor() && request.auth.uid == resource.data.doctorId;
+      allow create: if isDoctor() && request.auth.uid == request.resource.data.doctorId;
+      
+      // Patients can read their own medical reports
+      allow read: if signedIn() && request.auth.uid == resource.data.patientId;
+    }
+
+    // ---------- DOCTOR PROFILES (private) ----------
+    match /doctorProfiles/{doctorId} {
+      // Allow doctors to read and manage their own profile
+      allow read, create, update: if signedIn() && request.auth.uid == doctorId;
+      allow delete: if false;
+    }
+
+    // ---------- FAVORITES ----------
+    match /patients/{patientId}/favorites/{doctorId} {
+      allow read, write: if isPatient() && request.auth.uid == patientId;
+    }
+
+    // ---------- SEARCH LOG ----------
+    match /searchLogs/{logId} {
+      allow create: if isPatient();
+      allow read, update, delete: if false;
+    }
+
+    // ---------- CONVERSATIONS (MESSAGING) ----------
+    match /conversations/{conversationId} {
+      // Read if user is participant (doctor or patient)
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.doctorId || request.auth.uid == resource.data.patientId);
+      
+      // Create if user is one of the participants
+      allow create: if signedIn() && 
+        (request.auth.uid == request.resource.data.doctorId || request.auth.uid == request.resource.data.patientId);
+      
+      // Update if user is participant (for lastMessage, unreadCount, etc)
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.doctorId || request.auth.uid == resource.data.patientId);
+
+      allow delete: if false;
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Read messages if user is participant of the conversation
+        allow read: if signedIn() && 
+          (request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.doctorId || 
+           request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.patientId);
+        
+        // Create message if user is sender and participant
+        allow create: if signedIn() && 
+          request.resource.data.senderId == request.auth.uid &&
+          (request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.doctorId || 
+           request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.patientId);
+        
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- NOTIFICATIONS ----------
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if signedIn() && resource.data.recipientId == request.auth.uid;
+      
+      // Allow any signed-in user to create notifications (for booking appointments)
+      // Patients can create notifications for doctors when booking
+      // System can create reminder notifications
+      allow create: if signedIn();
+      
+      // Users can update their own notifications (mark as read, mark as sent)
+      allow update: if signedIn() && 
+                       resource.data.recipientId == request.auth.uid;
+      
+      // Users can delete their own notifications
+      allow delete: if signedIn() && resource.data.recipientId == request.auth.uid;
+    }
+
+    // ---------- VIDEO CONSULTATIONS ----------
+    match /videoConsultations/{consultationId} {
+      // Patients and doctors can read their own consultations
+      allow read: if signedIn() && 
+        (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.doctorId);
+      
+      // Both patients and doctors can create video consultations
+      allow create: if signedIn() && 
+        (request.auth.uid == request.resource.data.patientId || request.auth.uid == request.resource.data.doctorId);
+      
+      // Both patient and doctor can update consultation status
+      allow update: if signedIn() && 
+        (request.auth.uid == resource.data.patientId || request.auth.uid == resource.data.doctorId);
+      
+      // Only doctors can delete
+      allow delete: if isDoctor() && request.auth.uid == resource.data.doctorId;
+    }
+
+    // ---------- DEFAULT DENY ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
