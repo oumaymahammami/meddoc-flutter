@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nous avons besoin de votre localisation pour afficher les médecins à proximité et vous aider à obtenir un itinéraire.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Nous avons besoin de votre localisation pour afficher les médecins à proximité et vous aider à obtenir un itinéraire.</string>
 </dict>
 </plist>

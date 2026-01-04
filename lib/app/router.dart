@@ -17,6 +17,9 @@ import '../features/doctor/presentation/pages/doctor_dashboard_screen.dart';
 import '../features/doctor/presentation/pages/doctor_appointments_page.dart';
 import '../features/doctor/presentation/pages/doctor_patient_detail_page.dart';
 import '../features/agenda/presentation/pages/agenda_screen.dart';
+import '../shared/pages/geocoding_utility_page.dart';
+import '../shared/pages/geocoding_admin_page.dart';
+import '../shared/pages/quick_coordinate_fix_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -77,6 +80,19 @@ final router = GoRouter(
       path: '/doctor/patient/:id',
       builder: (c, s) =>
           DoctorPatientDetailPage(patientId: s.pathParameters['id']!),
+    ),
+    // Admin/Utility routes
+    GoRoute(
+      path: '/admin/geocoding',
+      builder: (c, s) => const GeocodingUtilityPage(),
+    ),
+    GoRoute(
+      path: '/admin/locations',
+      builder: (c, s) => const GeocodingAdminPage(),
+    ),
+    GoRoute(
+      path: '/admin/fix-coordinates',
+      builder: (c, s) => const QuickCoordinateFixPage(),
     ),
   ],
 );

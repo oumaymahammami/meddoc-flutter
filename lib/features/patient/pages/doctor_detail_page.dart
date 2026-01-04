@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
+import 'package:latlong2/latlong.dart' as latlng;
+import 'package:geolocator/geolocator.dart';
 
 import '../../../app/theme_config.dart';
 import '../data/doctor_search_datasource.dart';
@@ -79,6 +82,10 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
   late TabController _tabController;
   int _selectedTab = 0;
   int? _uniquePatientCount;
+  Position? _userLocation;
+  GoogleMapController? _mapController;
+  fm.MapController? _flutterMapController;
+  bool _isLoadingLocation = false;
 
   @override
   void initState() {
@@ -88,6 +95,8 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
       setState(() => _selectedTab = _tabController.index);
     });
     _fetchUniquePatientCount();
+    _flutterMapController = fm.MapController();
+    _getUserLocation();
   }
 
   /// Fetch the real number of unique patients from appointments
@@ -126,7 +135,63 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _mapController?.dispose();
+    _flutterMapController?.dispose();
     super.dispose();
+  }
+
+  /// Get user's current location
+  Future<void> _getUserLocation() async {
+    if (!mounted) return;
+
+    setState(() => _isLoadingLocation = true);
+
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          setState(() => _isLoadingLocation = false);
+        }
+        return;
+      }
+
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            setState(() => _isLoadingLocation = false);
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() => _isLoadingLocation = false);
+        }
+        return;
+      }
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (mounted) {
+        setState(() {
+          _userLocation = position;
+          _isLoadingLocation = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+      if (mounted) {
+        setState(() => _isLoadingLocation = false);
+      }
+    }
   }
 
   @override
@@ -2422,61 +2487,223 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
     final lat = doctor.location.coordinates.latitude;
     final lng = doctor.location.coordinates.longitude;
 
+    // Guard: if coordinates are missing or invalid, show a friendly message
+    final hasCoords = lat.abs() > 0.0001 && lng.abs() > 0.0001;
+    if (!hasCoords) {
+      return Container(
+        height: 250,
+        color: const Color(0xFFF1F5F9),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.location_off, size: 48, color: _disabled),
+              const SizedBox(height: 12),
+              const Text(
+                'Localisation indisponible',
+                style: TextStyle(
+                  color: _text,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  doctor.location.fullAddress,
+                  style: const TextStyle(color: _subText, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (kIsWeb) {
-      const googleWebKey =
-          String.fromEnvironment('GOOGLE_MAPS_API_KEY_WEB', defaultValue: '');
-      final hasGoogleKey = googleWebKey.isNotEmpty;
-
-      final googleStaticUrl = hasGoogleKey
-          ? 'https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=800x400&scale=2&maptype=roadmap&markers=color:blue%7C$lat,$lng&key=$googleWebKey'
-          : null;
-      final osmStaticUrl =
-          'https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng&zoom=15&size=800x400&markers=$lat,$lng,ol-marker';
-      final primaryUrl = googleStaticUrl ?? osmStaticUrl;
-
-      return InkWell(
-        onTap: () => _openInMaps(lat, lng, doctor.fullName),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (primaryUrl != null)
-              Image.network(
-                primaryUrl,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: const Color(0xFFF1F5F9),
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
+      // Interactive OpenStreetMap view for web
+      return Stack(
+        children: [
+          fm.FlutterMap(
+            key: ValueKey('map_${doctor.id}_${lat}_${lng}'),
+            mapController: _flutterMapController,
+            options: fm.MapOptions(
+              initialCenter: latlng.LatLng(lat, lng),
+              initialZoom: 15,
+              interactionOptions: const fm.InteractionOptions(
+                flags: fm.InteractiveFlag.pinchZoom | fm.InteractiveFlag.drag,
+              ),
+            ),
+            children: [
+              fm.TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'meddoc',
+              ),
+              fm.MarkerLayer(
+                markers: [
+                  // Doctor location marker
+                  fm.Marker(
+                    point: latlng.LatLng(lat, lng),
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.location_on,
+                      color: _primary,
+                      size: 34,
                     ),
-                  );
-                },
-                errorBuilder: (_, __, ___) {
-                  // Fallback to OSM if Google fails
-                  return Image.network(
-                    osmStaticUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: const Color(0xFFF1F5F9),
-                      child: const Center(
-                        child: Text(
-                          'Carte indisponible',
-                          style: TextStyle(
-                            color: _subText,
-                            fontWeight: FontWeight.w700,
-                          ),
+                  ),
+                  // User location marker
+                  if (_userLocation != null)
+                    fm.Marker(
+                      point: latlng.LatLng(
+                        _userLocation!.latitude,
+                        _userLocation!.longitude,
+                      ),
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.navigation,
+                          color: Colors.white,
+                          size: 20,
                         ),
                       ),
                     ),
-                  );
-                },
+                ],
               ),
+            ],
+          ),
+          // Loading indicator for location
+          if (_isLoadingLocation)
             Positioned(
-              right: 10,
-              top: 10,
+              left: 12,
+              bottom: 60,
               child: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(_primary),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Localisation...',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // My location button
+          if (_userLocation != null)
+            Positioned(
+              left: 12,
+              bottom: 60,
+              child: InkWell(
+                onTap: () {
+                  if (_userLocation != null && _flutterMapController != null) {
+                    _flutterMapController!.move(
+                      latlng.LatLng(
+                        _userLocation!.latitude,
+                        _userLocation!.longitude,
+                      ),
+                      15,
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.my_location,
+                    size: 20,
+                    color: _primary,
+                  ),
+                ),
+              ),
+            ),
+          Positioned(
+            right: 12,
+            bottom: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '© OpenStreetMap contributors',
+                style: TextStyle(
+                  color: _subText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 10,
+            top: 10,
+            child: InkWell(
+              onTap: () => _openInMaps(lat, lng, doctor.fullName),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -2505,17 +2732,16 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
     return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: LatLng(lat, lng),
-        zoom: 15,
-      ),
+      key: ValueKey('gmap_${doctor.id}_${lat}_${lng}'),
+      initialCameraPosition: CameraPosition(target: LatLng(lat, lng), zoom: 15),
       markers: {
+        // Doctor location marker
         Marker(
           markerId: MarkerId(doctor.id),
           position: LatLng(lat, lng),
@@ -2523,13 +2749,28 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
             title: doctor.fullName,
             snippet: doctor.location.address,
           ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
         ),
+        // User location marker
+        if (_userLocation != null)
+          Marker(
+            markerId: const MarkerId('user_location'),
+            position: LatLng(_userLocation!.latitude, _userLocation!.longitude),
+            infoWindow: const InfoWindow(title: 'Ma position'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueBlue,
+            ),
+          ),
       },
       zoomControlsEnabled: true,
       mapToolbarEnabled: false,
-      myLocationButtonEnabled: false,
+      myLocationButtonEnabled: true,
+      myLocationEnabled: true,
       compassEnabled: false,
       onMapCreated: (controller) {
+        _mapController = controller;
         debugPrint('Map loaded successfully');
       },
     );
@@ -2559,5 +2800,3 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
     }
   }
 }
-
-
