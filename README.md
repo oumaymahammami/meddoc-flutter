@@ -34,11 +34,16 @@ The platform supports both in-person and video consultations, real-time messagin
 ### For Patients
 -  **Smart Doctor Search** - Find doctors by specialty, location, and availability
 -  **Easy Appointment Booking** - Schedule appointments with preferred doctors
--  **Real-time Messaging** - Chat with doctors securely
--  **Video Consultations** - Join virtual consultations from anywhere
+-  **Real-time Messaging** - Chat with doctors securely and delete messages
+-  **Video Consultations** - Join virtual consultations from anywhere using Jitsi Meet
+  - Join waiting room before consultation
+  - Test audio/video equipment before joining
+  - Real-time video calls with doctors
+  - View consultation history and documents
 -  **Medical Records** - Access prescriptions, reports, and health history
 -  **Reviews & Ratings** - Rate and review doctors after appointments
--  **Notifications** - Get reminders for upcoming appointments
+-  **Notifications** - Get reminders for upcoming appointments (1h, 30min, 15min, 5min before)
+-  **Appointment Reminders** - Client-side reminder system with notification badges
 
 ### For Doctors
 -  **Professional Dashboard** - Overview of appointments, patients, and statistics
@@ -47,8 +52,24 @@ The platform supports both in-person and video consultations, real-time messagin
 -  **Prescription Management** - Create and manage prescriptions
 -  **Medical Reports** - Generate and store medical reports
 -  **Patient Communication** - Secure messaging with patients
--  **Video Consultations** - Conduct remote consultations
+-  **Video Consultations** - Conduct remote consultations with Jitsi Meet integration
+  - Equipment testing room before starting calls
+  - Real-time notification when patient enters waiting room
+  - In-call note-taking and prescription management
+  - Post-consultation documentation
+  - Auto-complete consultations after scheduled time
 -  **Profile Management** - Customize profile, specialty, and pricing
+
+### Video Consultation Features
+-  **Jitsi Meet Integration** - Secure, high-quality video calls
+-  **Waiting Rooms** - Separate waiting rooms for patients and doctors
+-  **Equipment Testing** - Test camera and microphone before joining
+-  **Real-time Status Updates** - Live status indicators for active consultations
+-  **Consultation Management** - View active, upcoming, and completed consultations
+-  **Post-Call Documentation** - Add notes and prescriptions after consultations
+-  **Auto-completion** - Consultations automatically complete after scheduled time
+-  **Multi-platform Support** - Works on web, Android, iOS, and desktop
+-  **Client-side Reminders** - Smart reminder system without cloud functions
 
 ##  Technologies Used
 
@@ -73,6 +94,11 @@ The platform supports both in-person and video consultations, real-time messagin
 - **timezone** (0.9.4) - Timezone support
 - **uuid** (4.5.1) - Unique ID generation
 - **flutter_rating_bar** (4.0.1) - Rating UI component
+- **jitsi_meet_flutter_sdk** (10.3.0) - Video conferencing integration
+- **google_maps_flutter** (2.14.0) - Google Maps integration
+- **google_maps_flutter_web** (0.5.14+3) - Google Maps for web
+- **url_launcher** (6.3.1) - Launch external URLs and phone calls
+- **path_provider** (2.1.0) - Access to file system paths
 
 ##  Prerequisites
 
@@ -323,10 +349,24 @@ meddoc-flutter/
 │   │   │   ├── data/
 │   │   │   ├── presentation/
 │   │   │   └── widgets/
-│   │   └── video_consultation/  # Video calls
+│   │   └── video_consultation/  # Video calls with Jitsi Meet
+│   │       ├── models/
+│   │       │   └── video_consultation.dart
+│   │       ├── pages/
+│   │       │   ├── video_call_page.dart         # Main video call page
+│   │       │   ├── waiting_room_page.dart       # Patient waiting room
+│   │       │   ├── doctor_waiting_room_page.dart # Doctor preparation room
+│   │       │   ├── video_appointments_page.dart  # Consultation list
+│   │       │   └── consultation_documents_page.dart
+│   │       └── widgets/
+│   │           └── video_consultation_card.dart
 │   └── shared/             # Shared utilities
 │       ├── services/
+│       │   └── reminder_service.dart  # Client-side reminders
 │       ├── pages/
+│       │   ├── chat_page.dart         # Enhanced with delete messages
+│       │   ├── conversations_page.dart
+│       │   └── notifications_page.dart # Enhanced reminder display
 │       └── design_system/
 ├── firestore.rules         # Firestore security rules
 ├── firestore.indexes.json  # Firestore indexes
@@ -345,6 +385,8 @@ The project includes Cloud Functions for:
 - **Schedule**: Runs daily to send reminders for upcoming appointments
 - **Trigger**: Scheduled (Firebase Cloud Scheduler)
 
+**Note**: The app also includes a client-side reminder service (`ReminderService`) that activates reminders when the app is running, reducing dependency on cloud functions for free-tier projects.
+
 ### Deploy Functions
 
 ```bash
@@ -353,6 +395,23 @@ npm install
 npm run build
 firebase deploy --only functions
 ```
+
+##  Video Consultation Setup
+
+### Jitsi Meet Configuration
+
+The app uses Jitsi Meet for video consultations. No additional setup is required as it uses the public Jitsi Meet server (`meet.jit.si`).
+
+For production use, consider:
+1. Setting up your own Jitsi Meet server for better privacy and control
+2. Updating the `serverURL` in `video_call_page.dart`
+3. Implementing JWT authentication for secure room access
+
+### Web Configuration
+
+For web deployment, ensure your `web/index.html` includes necessary permissions for camera and microphone access. The app automatically handles platform-specific implementations:
+- **Web**: Uses iframe with Jitsi Meet web interface
+- **Mobile/Desktop**: Uses native Jitsi Meet SDK
 
 ##  Available Scripts
 
@@ -433,6 +492,19 @@ firebase functions:log
    - Check Node.js version: `node --version` (should be 16+)
    - Install dependencies: `cd functions && npm install`
    - Build TypeScript: `npm run build`
+
+6. **Video consultation issues**
+   - **Web**: Ensure browser has camera/microphone permissions
+   - **Mobile**: Check app permissions in device settings
+   - **Device in use error**: Close other apps using camera/microphone
+   - **Black screen**: Verify Jitsi Meet SDK is properly installed
+   - Test with: `flutter clean && flutter pub get`
+
+7. **Reminder notifications not showing**
+   - The app uses client-side reminders that activate when the app is running
+   - Keep the app running in background for reminders to work
+   - Check notification permissions are enabled
+   - Reminders are scheduled for: 1h, 30min, 15min, and 5min before appointments
 
 ### Getting Help
 
