@@ -458,10 +458,6 @@ Make sure to review and customize these rules for production use.
 - ✅ macOS (10.14+)
 - ✅ Linux
 
-## 📱 Screenshots
-
-*(Add screenshots of your app here)*
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
