@@ -1,4 +1,4 @@
-# MedDoc - Medical Consultation Platform 🏥
+# MedDoc - Medical Consultation Platform 
 
 A comprehensive Flutter-based telemedicine application connecting doctors and patients for seamless healthcare consultations, appointments, and medical management.
 
@@ -7,7 +7,7 @@ A comprehensive Flutter-based telemedicine application connecting doctors and pa
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=flat&logo=dart)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-## 📋 Table of Contents
+##  Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -21,7 +21,7 @@ A comprehensive Flutter-based telemedicine application connecting doctors and pa
 - [Available Scripts](#available-scripts)
 - [Troubleshooting](#troubleshooting)
 
-## 🌟 Overview
+##  Overview
 
 MedDoc is a modern telemedicine platform built with Flutter that enables:
 - **Patients** to search for doctors, book appointments, and manage their health records
@@ -29,28 +29,28 @@ MedDoc is a modern telemedicine platform built with Flutter that enables:
 
 The platform supports both in-person and video consultations, real-time messaging, appointment notifications, and comprehensive medical record management.
 
-## ✨ Features
+##  Features
 
 ### For Patients
-- 🔍 **Smart Doctor Search** - Find doctors by specialty, location, and availability
-- 📅 **Easy Appointment Booking** - Schedule appointments with preferred doctors
-- 💬 **Real-time Messaging** - Chat with doctors securely
-- 📱 **Video Consultations** - Join virtual consultations from anywhere
-- 📄 **Medical Records** - Access prescriptions, reports, and health history
-- ⭐ **Reviews & Ratings** - Rate and review doctors after appointments
-- 🔔 **Notifications** - Get reminders for upcoming appointments
+-  **Smart Doctor Search** - Find doctors by specialty, location, and availability
+-  **Easy Appointment Booking** - Schedule appointments with preferred doctors
+-  **Real-time Messaging** - Chat with doctors securely
+-  **Video Consultations** - Join virtual consultations from anywhere
+-  **Medical Records** - Access prescriptions, reports, and health history
+-  **Reviews & Ratings** - Rate and review doctors after appointments
+-  **Notifications** - Get reminders for upcoming appointments
 
 ### For Doctors
-- 📊 **Professional Dashboard** - Overview of appointments, patients, and statistics
-- 📆 **Agenda Management** - Manage availability and appointment slots
-- 👥 **Patient Management** - View patient details, history, and medical records
-- 💊 **Prescription Management** - Create and manage prescriptions
-- 📝 **Medical Reports** - Generate and store medical reports
-- 💬 **Patient Communication** - Secure messaging with patients
-- 🎥 **Video Consultations** - Conduct remote consultations
-- ⚙️ **Profile Management** - Customize profile, specialty, and pricing
+-  **Professional Dashboard** - Overview of appointments, patients, and statistics
+-  **Agenda Management** - Manage availability and appointment slots
+-  **Patient Management** - View patient details, history, and medical records
+-  **Prescription Management** - Create and manage prescriptions
+-  **Medical Reports** - Generate and store medical reports
+-  **Patient Communication** - Secure messaging with patients
+-  **Video Consultations** - Conduct remote consultations
+-  **Profile Management** - Customize profile, specialty, and pricing
 
-## 🛠 Technologies Used
+##  Technologies Used
 
 ### Frontend
 - **Flutter** (3.0+) - Cross-platform UI framework
@@ -74,7 +74,7 @@ The platform supports both in-person and video consultations, real-time messagin
 - **uuid** (4.5.1) - Unique ID generation
 - **flutter_rating_bar** (4.0.1) - Rating UI component
 
-## 📦 Prerequisites
+##  Prerequisites
 
 Before you begin, ensure you have the following installed:
 
@@ -117,7 +117,7 @@ Before you begin, ensure you have the following installed:
    - **macOS**: Xcode
    - **Linux**: Required Linux development libraries
 
-## 🚀 Installation
+##  Installation
 
 ### 1. Clone the Repository
 
@@ -140,7 +140,7 @@ npm install
 cd ..
 ```
 
-## 🔥 Firebase Setup
+##  Firebase Setup
 
 ### 1. Create a Firebase Project
 
@@ -216,7 +216,7 @@ firebase deploy --only functions
 cd ..
 ```
 
-## ▶️ Running the Application
+##  Running the Application
 
 ### Run on Chrome (Web)
 
@@ -276,7 +276,7 @@ flutter build web --release
 flutter build windows --release
 ```
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 meddoc-flutter/
@@ -336,7 +336,7 @@ meddoc-flutter/
 └── README.md              # This file
 ```
 
-## ⚡ Firebase Functions
+##  Firebase Functions
 
 The project includes Cloud Functions for:
 
@@ -354,7 +354,7 @@ npm run build
 firebase deploy --only functions
 ```
 
-## 📝 Available Scripts
+##  Available Scripts
 
 ### Flutter Commands
 
@@ -440,7 +440,7 @@ firebase functions:log
 - Firebase Documentation: https://firebase.google.com/docs
 - FlutterFire Documentation: https://firebase.flutter.dev/
 
-## 🔐 Security Rules
+##  Security Rules
 
 The application uses Firebase Security Rules to protect data:
 
@@ -449,7 +449,7 @@ The application uses Firebase Security Rules to protect data:
 
 Make sure to review and customize these rules for production use.
 
-## 🌍 Supported Platforms
+##  Supported Platforms
 
 - ✅ Android (6.0+)
 - ✅ iOS (12.0+)
@@ -458,7 +458,7 @@ Make sure to review and customize these rules for production use.
 - ✅ macOS (10.14+)
 - ✅ Linux
 
-## 🤝 Contributing
+##  Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -468,11 +468,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - Flutter team for the amazing framework
 - Firebase for backend services
