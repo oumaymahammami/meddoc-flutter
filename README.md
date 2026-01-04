@@ -406,7 +406,7 @@ firebase deploy --only functions
 firebase functions:log
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
