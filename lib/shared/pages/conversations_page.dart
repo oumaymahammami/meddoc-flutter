@@ -87,7 +87,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Choisir un médecin',
+                      'Choose a Doctor',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -104,14 +104,14 @@ class _ConversationsPageState extends State<ConversationsPage> {
             ),
             Expanded(
               child: doctorsSnapshot.docs.isEmpty
-                  ? const Center(child: Text('Aucun médecin disponible'))
+                  ? const Center(child: Text('No doctors available'))
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: doctorsSnapshot.docs.length,
                       itemBuilder: (context, index) {
                         final doc = doctorsSnapshot.docs[index];
                         final data = doc.data();
-                        final doctorName = data['name'] ?? 'Médecin';
+                        final doctorName = data['name'] ?? 'Doctor';
                         final specialty = data['specialty'] ?? '';
 
                         return Container(
@@ -218,7 +218,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Conversation créée avec $doctorName'),
+              content: Text('Conversation created with $doctorName'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
@@ -331,7 +331,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
                 elevation: 0,
                 icon: const Icon(Icons.add_rounded, size: 22),
                 label: const Text(
-                  'Nouveau message',
+                  'New message',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.3,
@@ -389,7 +389,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Vos conversations apparaîtront ici',
+                    'Your conversations will appear here',
                     style: TextStyle(
                       color: Colors.grey[500],
                       fontSize: 14,

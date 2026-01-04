@@ -490,7 +490,7 @@ class _HeroPanel extends StatelessWidget {
             ),
             const SizedBox(height: AuthDimensions.paddingMD),
             Text(
-              'Suivez vos dossiers, vos rendez-vous et vos résultats en temps réel. Interface moderne, données protégées.',
+              'Track your records, appointments and results in real-time. Modern interface, protected data.',
               style: textTheme.bodyMedium?.copyWith(
                 color: Colors.white.withValues(alpha: 0.9),
                 height: 1.4,

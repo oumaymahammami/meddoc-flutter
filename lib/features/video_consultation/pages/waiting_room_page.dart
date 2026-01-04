@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:html' as html;
+import 'dart:ui_web' as ui_web;
 import '../models/video_consultation.dart';
 import 'video_call_page.dart';
 
@@ -17,6 +19,60 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
   bool _cameraEnabled = true;
   bool _micEnabled = true;
   bool _isTesting = false;
+  bool _isNavigating = false; // Prevent multiple navigations
+  html.MediaStream? _mediaStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      final viewId = 'patient-camera-preview-${widget.consultation.id}';
+
+      // Check if already registered to prevent "Device in use" error
+      try {
+        // Register video element
+        // ignore: undefined_prefixed_name
+        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          final video = html.VideoElement()
+            ..autoplay = true
+            ..muted = true
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..style.objectFit = 'cover';
+
+          // Request camera and microphone access
+          html.window.navigator.mediaDevices!
+              .getUserMedia({'video': true, 'audio': true})
+              .then((stream) {
+                if (mounted) {
+                  _mediaStream = stream;
+                  video.srcObject = stream;
+                }
+              })
+              .catchError((error) {
+                print('Error accessing camera: $error');
+              });
+
+          return video;
+        });
+      } catch (e) {
+        // View factory already registered, ignore
+        print('View factory already registered: $e');
+      }
+    } catch (e) {
+      print('Error initializing camera: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _mediaStream?.getTracks().forEach((track) => track.stop());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,22 +96,25 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
             .doc(widget.consultation.id)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
+          if (snapshot.hasData && snapshot.data != null) {
             final data = snapshot.data!.data() as Map<String, dynamic>?;
             final status = data?['status'] as String?;
 
-            // If call has started, automatically join
-            if (status == 'in_progress' && mounted) {
-              Future.microtask(() {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => VideoCallPage(
-                      consultation: widget.consultation,
-                      isDoctor: false,
+            // If call has started, automatically join (only once)
+            if (status == 'in_progress' && !_isNavigating) {
+              _isNavigating = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VideoCallPage(
+                        consultation: widget.consultation,
+                        isDoctor: false,
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               });
             }
           }
@@ -66,7 +125,7 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
               children: [
                 const SizedBox(height: 20),
 
-                // Video Preview Area
+                // Real Video Preview Area with getUserMedia
                 Container(
                   width: double.infinity,
                   height: 300,
@@ -80,27 +139,33 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
                   ),
                   child: Stack(
                     children: [
-                      Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _cameraEnabled
-                                  ? Icons.videocam
-                                  : Icons.videocam_off,
-                              color: Colors.white.withOpacity(0.5),
-                              size: 64,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _cameraEnabled ? 'Camera Preview' : 'Camera Off',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 16,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: _cameraEnabled
+                            ? HtmlElementView(
+                                viewType:
+                                    'patient-camera-preview-${widget.consultation.id}',
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.videocam_off,
+                                      color: Colors.white.withOpacity(0.5),
+                                      size: 64,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Camera Off',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.7),
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                       Positioned(
                         bottom: 16,
@@ -178,64 +243,91 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
                 const SizedBox(height: 24),
 
                 // Waiting Status
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF7C3AED), Color(0xFF9333EA)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          shape: BoxShape.circle,
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('videoConsultations')
+                      .doc(widget.consultation.id)
+                      .snapshots(),
+                  builder: (context, consultSnapshot) {
+                    final consultData =
+                        consultSnapshot.data?.data() as Map<String, dynamic>?;
+                    final doctorReady = consultData?['doctorReady'] ?? false;
+
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: doctorReady
+                              ? [
+                                  const Color(0xFF10B981),
+                                  const Color(0xFF059669),
+                                ]
+                              : [
+                                  const Color(0xFF7C3AED),
+                                  const Color(0xFF9333EA),
+                                ],
                         ),
-                        child: const Icon(
-                          Icons.hourglass_empty_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(width: 16),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Waiting for doctor',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
                             ),
-                            SizedBox(height: 4),
-                            Text(
-                              'The doctor will start the call soon',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
+                            child: Icon(
+                              doctorReady
+                                  ? Icons.check_circle_rounded
+                                  : Icons.hourglass_empty_rounded,
+                              color: Colors.white,
+                              size: 24,
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
                           ),
-                        ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  doctorReady
+                                      ? 'Doctor is ready!'
+                                      : 'Waiting for doctor',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  doctorReady
+                                      ? 'The doctor will start the call any moment'
+                                      : 'The doctor will join soon',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!doctorReady)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 24),
@@ -366,9 +458,36 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
 
     if (_isTesting) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Testing equipment... Speak to test your microphone'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                _micEnabled ? Icons.mic : Icons.mic_off,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _micEnabled
+                      ? 'Testing microphone... Speak now to test'
+                      : 'Microphone is off. Turn it on to test',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: _micEnabled
+              ? const Color(0xFF10B981)
+              : const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
         ),
       );
     }

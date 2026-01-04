@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../app/theme_config.dart';
 import '../data/doctor_search_datasource.dart';
@@ -137,7 +138,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
       body: doctorAsync.when(
         data: (doctor) {
           if (doctor == null) {
-            return const Center(child: Text('Praticien non trouvé'));
+            return const Center(child: Text('Practitioner not found'));
           }
           return _buildDoctorDetail(doctor);
         },
@@ -328,7 +329,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
           Text(
             doctor.specialty.name.isNotEmpty
                 ? doctor.specialty.name
-                : "Spécialité à venir",
+                : "Specialty coming soon",
             style: const TextStyle(
               fontSize: 15,
               color: _subText,
@@ -348,7 +349,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                 child: Text(
                   doctor.location.fullAddress.isNotEmpty
                       ? doctor.location.fullAddress
-                      : "Adresse non renseignée",
+                      : "Address not provided",
                   style: const TextStyle(color: _subText, fontSize: 13.5),
                 ),
               ),
@@ -364,10 +365,10 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                   color: Colors.amber,
                   value: doctor.ratings.count > 0
                       ? doctor.ratings.average.toStringAsFixed(1)
-                      : "Nouveau",
+                      : "New",
                   label: doctor.ratings.count > 0
                       ? "${doctor.ratings.count} avis"
-                      : "Pas encore d'avis",
+                      : "No reviews yet",
                 ),
               ),
               const SizedBox(width: 12),
@@ -454,7 +455,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
           child: ElevatedButton.icon(
             onPressed: () => _bookAppointment(doctor),
             icon: const Icon(Icons.calendar_month_outlined),
-            label: const Text('Prendre RDV'),
+            label: const Text('Book Appointment'),
             style: ElevatedButton.styleFrom(
               backgroundColor: _primary,
               foregroundColor: Colors.white,
@@ -515,7 +516,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
           labelStyle: const TextStyle(fontWeight: FontWeight.w800),
           dividerColor: Colors.transparent,
           tabs: const [
-            Tab(text: "À propos"),
+            Tab(text: "About"),
             Tab(text: "Horaires"),
             Tab(text: "Avis"),
           ],
@@ -545,12 +546,12 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildInfoCard(
-            'Présentation',
+            'Presentation',
             Icons.person_outline,
             Text(
               doctor.profile.bio.isNotEmpty
                   ? doctor.profile.bio
-                  : 'Le praticien complétera bientôt cette section.',
+                  : 'The practitioner will complete this section soon.',
               style: const TextStyle(
                 fontSize: 14,
                 color: _subText,
@@ -566,16 +567,12 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               children: [
                 _buildInfoRow(
                   Icons.email_outlined,
-                  doctor.email.isNotEmpty
-                      ? doctor.email
-                      : "Email non renseigné",
+                  doctor.email.isNotEmpty ? doctor.email : "Email not provided",
                 ),
                 const SizedBox(height: 10),
                 _buildInfoRow(
                   Icons.phone_outlined,
-                  doctor.phone.isNotEmpty
-                      ? doctor.phone
-                      : "Téléphone non renseigné",
+                  doctor.phone.isNotEmpty ? doctor.phone : "Phone not provided",
                 ),
               ],
             ),
@@ -623,7 +620,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                 if (doctor.consultationModes.video) ...[
                   const Divider(height: 24),
                   _buildPriceRow(
-                    'Téléconsultation',
+                    'Video Consultation',
                     '${doctor.pricing.videoFee.toStringAsFixed(0)}€',
                   ),
                 ],
@@ -659,7 +656,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               'Disponibilités',
               Icons.schedule_outlined,
               const Text(
-                'Aucun créneau disponible pour le moment. Réessayez bientôt.',
+                'No time slots available at the moment. Try again soon.',
                 style: TextStyle(fontSize: 14, color: _subText),
               ),
             );
@@ -898,7 +895,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Connectez-vous pour prendre rendez-vous.'),
+            content: Text('Please log in to book an appointment.'),
           ),
         );
         context.push('/login');
@@ -1059,12 +1056,18 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
           print('Error creating doctor notification: $e');
         }
 
-        // 2. Schedule patient reminders (1h and 30min)
+        // 2. Schedule patient reminders (1h, 30min, 15min, and 5min before)
         final oneHourBefore = selected.startTime.subtract(
           const Duration(hours: 1),
         );
         final thirtyMinsBefore = selected.startTime.subtract(
           const Duration(minutes: 30),
+        );
+        final fifteenMinsBefore = selected.startTime.subtract(
+          const Duration(minutes: 15),
+        );
+        final fiveMinsBefore = selected.startTime.subtract(
+          const Duration(minutes: 5),
         );
         final nowTime = DateTime.now();
 
@@ -1087,9 +1090,16 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               'doctorName': doctor.fullName,
               'reminderType': '1_hour',
             });
+            print(
+              '✅ Created 1h reminder for ${_formatTime(selected.startTime)} (scheduled: ${oneHourBefore.toString()})',
+            );
           } catch (e) {
             print('Error creating 1h reminder: $e');
           }
+        } else {
+          print(
+            '⏭️ Skipped 1h reminder (time already passed or no appointmentId)',
+          );
         }
 
         // 30 minutes reminder
@@ -1111,9 +1121,72 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               'doctorName': doctor.fullName,
               'reminderType': '30_minutes',
             });
+            print(
+              '✅ Created 30min reminder (scheduled: ${thirtyMinsBefore.toString()})',
+            );
           } catch (e) {
             print('Error creating 30min reminder: $e');
           }
+        } else {
+          print('⏭️ Skipped 30min reminder (time already passed)');
+        }
+
+        // 15 minutes reminder
+        if (fifteenMinsBefore.isAfter(nowTime) &&
+            appointmentIdForNotification != null) {
+          try {
+            await notificationsRef.add({
+              'recipientId': user.uid,
+              'type': 'appointment_reminder',
+              'title': 'Appointment Reminder',
+              'message':
+                  'Your appointment with Dr. ${doctor.fullName} is in 15 minutes at ${_formatTime(selected.startTime)}',
+              'createdAt': FieldValue.serverTimestamp(),
+              'scheduledFor': Timestamp.fromDate(fifteenMinsBefore),
+              'read': false,
+              'sent': false,
+              'appointmentId': appointmentIdForNotification!,
+              'appointmentTime': Timestamp.fromDate(selected.startTime),
+              'doctorName': doctor.fullName,
+              'reminderType': '15_minutes',
+            });
+            print(
+              '✅ Created 15min reminder (scheduled: ${fifteenMinsBefore.toString()})',
+            );
+          } catch (e) {
+            print('Error creating 15min reminder: $e');
+          }
+        } else {
+          print('⏭️ Skipped 15min reminder (time already passed)');
+        }
+
+        // 5 minutes reminder
+        if (fiveMinsBefore.isAfter(nowTime) &&
+            appointmentIdForNotification != null) {
+          try {
+            await notificationsRef.add({
+              'recipientId': user.uid,
+              'type': 'appointment_reminder',
+              'title': 'Appointment Reminder',
+              'message':
+                  'Your appointment with Dr. ${doctor.fullName} is starting in 5 minutes at ${_formatTime(selected.startTime)}',
+              'createdAt': FieldValue.serverTimestamp(),
+              'scheduledFor': Timestamp.fromDate(fiveMinsBefore),
+              'read': false,
+              'sent': false,
+              'appointmentId': appointmentIdForNotification!,
+              'appointmentTime': Timestamp.fromDate(selected.startTime),
+              'doctorName': doctor.fullName,
+              'reminderType': '5_minutes',
+            });
+            print(
+              '✅ Created 5min reminder (scheduled: ${fiveMinsBefore.toString()})',
+            );
+          } catch (e) {
+            print('Error creating 5min reminder: $e');
+          }
+        } else {
+          print('⏭️ Skipped 5min reminder (time already passed)');
         }
       } catch (notifError) {
         // Log but don't fail the booking if notifications fail
@@ -1123,7 +1196,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Rendez-vous confirmé.')));
+        ).showSnackBar(const SnackBar(content: Text('Appointment confirmed.')));
         ref.invalidate(doctorSlotsProvider);
       }
     } catch (e) {
@@ -1517,76 +1590,136 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                 ),
               ],
             ),
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Header with icon
+                // Header with icon and gradient background
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Colors.amber, Color(0xFFF59E0B)],
+                      colors: [
+                        Color(0xFFFCD34D),
+                        Color(0xFFF59E0B),
+                        Color(0xFFD97706),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.amber.withOpacity(0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
+                        color: const Color(0xFFF59E0B).withOpacity(0.5),
+                        blurRadius: 30,
+                        offset: const Offset(0, 12),
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.star_rounded,
-                    color: Colors.white,
-                    size: 40,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.star_rounded,
+                      color: Colors.white,
+                      size: 48,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 const Text(
-                  'Laisser un avis',
+                  'Évaluez votre expérience',
                   style: TextStyle(
-                    fontSize: 26,
+                    fontSize: 28,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF111827),
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.8,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Partagez votre expérience avec ${doctor.fullName}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Rating stars
+                const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.amber.withOpacity(0.2),
-                      width: 1.5,
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.amber.withOpacity(0.15),
+                        Colors.orange.withOpacity(0.15),
+                      ],
                     ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Dr. ${doctor.fullName}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFFD97706),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Rating stars with enhanced design
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.amber.withOpacity(0.08),
+                        Colors.orange.withOpacity(0.06),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.amber.withOpacity(0.3),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.amber.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
-                      const Text(
-                        'Votre note',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                          color: Color(0xFF111827),
-                        ),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Votre évaluation',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              color: Color(0xFF111827),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFF59E0B),
+                            size: 20,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(5, (index) {
@@ -1595,48 +1728,75 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                                 setState(() => selectedRating = index + 1.0),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
+                                horizontal: 8,
                               ),
                               child: AnimatedScale(
-                                scale: index < selectedRating ? 1.1 : 1.0,
+                                scale: index < selectedRating ? 1.2 : 1.0,
                                 duration: const Duration(milliseconds: 200),
-                                child: Icon(
-                                  index < selectedRating
-                                      ? Icons.star_rounded
-                                      : Icons.star_outline_rounded,
-                                  color: Colors.amber,
-                                  size: 42,
-                                  shadows: index < selectedRating
-                                      ? [
-                                          Shadow(
-                                            color: Colors.amber.withOpacity(
-                                              0.5,
-                                            ),
-                                            blurRadius: 8,
-                                          ),
-                                        ]
+                                curve: Curves.easeOutBack,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: index < selectedRating
+                                      ? BoxDecoration(
+                                          color: Colors.amber.withOpacity(0.2),
+                                          shape: BoxShape.circle,
+                                        )
                                       : null,
+                                  child: Icon(
+                                    index < selectedRating
+                                        ? Icons.star_rounded
+                                        : Icons.star_outline_rounded,
+                                    color: index < selectedRating
+                                        ? const Color(0xFFF59E0B)
+                                        : Colors.grey[400],
+                                    size: 46,
+                                    shadows: index < selectedRating
+                                        ? [
+                                            Shadow(
+                                              color: const Color(
+                                                0xFFF59E0B,
+                                              ).withOpacity(0.6),
+                                              blurRadius: 12,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
                                 ),
                               ),
                             ),
                           );
                         }),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        selectedRating == 5.0
-                            ? 'Excellent!'
-                            : selectedRating == 4.0
-                            ? 'Très bien!'
-                            : selectedRating == 3.0
-                            ? 'Bien'
-                            : selectedRating == 2.0
-                            ? 'Moyen'
-                            : 'Insatisfait',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.amber[800],
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFFFCD34D).withOpacity(0.2),
+                              const Color(0xFFF59E0B).withOpacity(0.2),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          selectedRating == 5.0
+                              ? '🌟 Excellent!'
+                              : selectedRating == 4.0
+                              ? '😊 Très bien!'
+                              : selectedRating == 3.0
+                              ? '👍 Bien'
+                              : selectedRating == 2.0
+                              ? '😐 Moyen'
+                              : '😕 Insatisfait',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFD97706),
+                          ),
                         ),
                       ),
                     ],
@@ -1692,57 +1852,77 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
                 ),
                 const SizedBox(height: 24),
 
-                // Action buttons
+                // Action buttons with enhanced design
                 Row(
                   children: [
                     Expanded(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context, false),
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: Colors.grey[300]!),
+                            side: BorderSide(
+                              color: Colors.grey[300]!,
+                              width: 2,
+                            ),
                           ),
+                          backgroundColor: Colors.grey[50],
                         ),
                         child: Text(
                           'Annuler',
                           style: TextStyle(
                             color: Colors.grey[700],
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             fontSize: 15,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
                     Expanded(
                       flex: 2,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.amber,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shadowColor: Colors.amber.withOpacity(0.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFCD34D), Color(0xFFF59E0B)],
                           ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.send_rounded, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'Publier',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 15,
-                              ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFF59E0B).withOpacity(0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
                             ),
                           ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.send_rounded, size: 20),
+                              SizedBox(width: 10),
+                              Text(
+                                'Publier l\'avis',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -2149,7 +2329,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               ],
             ),
           ),
-          // Map preview
+          // Map preview with web-friendly fallback
           Container(
             height: 200,
             margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -2158,32 +2338,7 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
               border: Border.all(color: _border),
             ),
             clipBehavior: Clip.antiAlias,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: LatLng(
-                  doctor.location.coordinates.latitude,
-                  doctor.location.coordinates.longitude,
-                ),
-                zoom: 15,
-              ),
-              markers: {
-                Marker(
-                  markerId: MarkerId(doctor.id),
-                  position: LatLng(
-                    doctor.location.coordinates.latitude,
-                    doctor.location.coordinates.longitude,
-                  ),
-                  infoWindow: InfoWindow(
-                    title: doctor.fullName,
-                    snippet: doctor.location.address,
-                  ),
-                ),
-              },
-              zoomControlsEnabled: true,
-              mapToolbarEnabled: false,
-              myLocationButtonEnabled: false,
-              compassEnabled: false,
-            ),
+            child: _buildMapPreview(doctor),
           ),
           const SizedBox(height: 14),
           Padding(
@@ -2263,6 +2418,123 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
     );
   }
 
+  Widget _buildMapPreview(Doctor doctor) {
+    final lat = doctor.location.coordinates.latitude;
+    final lng = doctor.location.coordinates.longitude;
+
+    if (kIsWeb) {
+      const googleWebKey =
+          String.fromEnvironment('GOOGLE_MAPS_API_KEY_WEB', defaultValue: '');
+      final hasGoogleKey = googleWebKey.isNotEmpty;
+
+      final googleStaticUrl = hasGoogleKey
+          ? 'https://maps.googleapis.com/maps/api/staticmap?center=$lat,$lng&zoom=15&size=800x400&scale=2&maptype=roadmap&markers=color:blue%7C$lat,$lng&key=$googleWebKey'
+          : null;
+      final osmStaticUrl =
+          'https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng&zoom=15&size=800x400&markers=$lat,$lng,ol-marker';
+      final primaryUrl = googleStaticUrl ?? osmStaticUrl;
+
+      return InkWell(
+        onTap: () => _openInMaps(lat, lng, doctor.fullName),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (primaryUrl != null)
+              Image.network(
+                primaryUrl,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    color: const Color(0xFFF1F5F9),
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) {
+                  // Fallback to OSM if Google fails
+                  return Image.network(
+                    osmStaticUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: const Color(0xFFF1F5F9),
+                      child: const Center(
+                        child: Text(
+                          'Carte indisponible',
+                          style: TextStyle(
+                            color: _subText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            Positioned(
+              right: 10,
+              top: 10,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.open_in_new, size: 16, color: _primary),
+                    SizedBox(width: 6),
+                    Text(
+                      'Ouvrir dans Maps',
+                      style: TextStyle(
+                        color: _primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: LatLng(lat, lng),
+        zoom: 15,
+      ),
+      markers: {
+        Marker(
+          markerId: MarkerId(doctor.id),
+          position: LatLng(lat, lng),
+          infoWindow: InfoWindow(
+            title: doctor.fullName,
+            snippet: doctor.location.address,
+          ),
+        ),
+      },
+      zoomControlsEnabled: true,
+      mapToolbarEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: false,
+      onMapCreated: (controller) {
+        debugPrint('Map loaded successfully');
+      },
+    );
+  }
+
   /// Open location in Google Maps or Apple Maps
   Future<void> _openInMaps(
     double latitude,
@@ -2287,3 +2559,5 @@ class _DoctorDetailPageState extends ConsumerState<DoctorDetailPage>
     }
   }
 }
+
+

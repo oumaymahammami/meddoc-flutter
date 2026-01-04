@@ -71,7 +71,7 @@ class _AppointmentsPageState extends State<AppointmentsPage>
         return Appointment(
           id: doc.id,
           title: (data['reason'] ?? 'Consultation').toString(),
-          doctor: (data['doctorName'] ?? data['doctorId'] ?? 'Votre medecin')
+          doctor: (data['doctorName'] ?? data['doctorId'] ?? 'Your doctor')
               .toString(),
           doctorId: (data['doctorId'] ?? '').toString(),
           specialty: (data['doctorSpecialty'] ?? '').toString(),
@@ -768,285 +768,409 @@ class _AppointmentsPageState extends State<AppointmentsPage>
 
   Widget _buildAppointmentCard(Appointment appointment) {
     final isCancelled = appointment.status == AppointmentStatus.cancelled;
+    final statusColor = appointment.status == AppointmentStatus.confirmed
+        ? const Color(0xFF10B981)
+        : appointment.status == AppointmentStatus.pending
+        ? const Color(0xFFF59E0B)
+        : const Color(0xFFEF4444);
 
     return TweenAnimationBuilder<double>(
       duration: AppAnimations.normal,
       tween: Tween(begin: 0.0, end: 1.0),
       builder: (context, value, child) {
         return Transform.scale(
-          scale: value,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            decoration: BoxDecoration(
-              gradient: isCancelled
-                  ? const LinearGradient(
-                      colors: [Color(0xFFFEF5F5), Color(0xFFFFF5F5)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : LinearGradient(
-                      colors: [
-                        _getAppointmentColor(
-                          appointment.type,
-                        ).withValues(alpha: 0.08),
-                        _getAppointmentColor(
-                          appointment.type,
-                        ).withValues(alpha: 0.02),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isCancelled
-                    ? const Color(0xFFFCA5A5).withValues(alpha: 0.4)
-                    : _getAppointmentColor(
-                        appointment.type,
-                      ).withValues(alpha: 0.3),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
+          scale: 0.95 + (value * 0.05),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
                   color: isCancelled
-                      ? Colors.red.withValues(alpha: 0.08)
-                      : _getAppointmentColor(
-                          appointment.type,
-                        ).withValues(alpha: 0.12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                      ? const Color(0xFFE5E7EB)
+                      : statusColor.withOpacity(0.3),
+                  width: 2,
                 ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: isCancelled ? null : () {},
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    children: [
-                      // Icon Container
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          gradient: isCancelled
-                              ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFFF87171),
-                                    Color(0xFFEF4444),
-                                  ],
-                                )
-                              : _getAppointmentGradient(appointment.type),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isCancelled
-                                  ? Colors.red.withValues(alpha: 0.3)
-                                  : _getAppointmentColor(
-                                      appointment.type,
-                                    ).withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          isCancelled
-                              ? Icons.event_busy_rounded
-                              : _getAppointmentIcon(appointment.type),
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-
-                      // Content
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                boxShadow: [
+                  BoxShadow(
+                    color: isCancelled
+                        ? Colors.black.withOpacity(0.04)
+                        : statusColor.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: isCancelled ? null : () {},
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Row(
                           children: [
-                            Text(
-                              appointment.title,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: isCancelled
-                                    ? const Color(0xFF9CA3AF)
-                                    : const Color(0xFF1A202C),
-                                decoration: isCancelled
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.person_outline_rounded,
-                                  size: 14,
-                                  color: isCancelled
-                                      ? const Color(0xFFD1D5DB)
-                                      : const Color(0xFF718096),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    appointment.doctor,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: isCancelled
-                                          ? const Color(0xFFD1D5DB)
-                                          : const Color(0xFF718096),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (appointment.specialty != null &&
-                                appointment.specialty!.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                appointment.specialty!,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isCancelled
-                                      ? const Color(0xFFD1D5DB)
-                                      : _getAppointmentColor(appointment.type),
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today_rounded,
-                                  size: 13,
-                                  color: isCancelled
-                                      ? const Color(0xFFD1D5DB)
-                                      : _getAppointmentColor(appointment.type),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  DateFormat(
-                                    'EEE, d MMM',
-                                  ).format(appointment.fullDate),
-                                  style: TextStyle(
-                                    fontSize: 12,
+                            // Icon Container with gradient
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                gradient: isCancelled
+                                    ? LinearGradient(
+                                        colors: [
+                                          Colors.grey.shade400,
+                                          Colors.grey.shade500,
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      )
+                                    : _getAppointmentGradient(appointment.type),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
                                     color: isCancelled
-                                        ? const Color(0xFFD1D5DB)
-                                        : const Color(0xFF718096),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Icon(
-                                  Icons.access_time_rounded,
-                                  size: 13,
-                                  color: isCancelled
-                                      ? const Color(0xFFD1D5DB)
-                                      : _getAppointmentColor(appointment.type),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${appointment.time.format(context)} • ${appointment.duration} min',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isCancelled
-                                        ? const Color(0xFFD1D5DB)
+                                        ? Colors.grey.withOpacity(0.2)
                                         : _getAppointmentColor(
                                             appointment.type,
-                                          ),
-                                    fontWeight: FontWeight.w700,
+                                          ).withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              child: Icon(
+                                isCancelled
+                                    ? Icons.event_busy_rounded
+                                    : _getAppointmentIcon(appointment.type),
+                                color: Colors.white,
+                                size: 32,
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
+                            const SizedBox(width: 16),
 
-                      // Status & Actions
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _buildStatusBadge(appointment.status),
-                          const SizedBox(height: 8),
-                          if (isCancelled)
-                            // Individual clear button for cancelled appointments
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () =>
-                                    _deleteSingleAppointment(appointment),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF2F2),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: const Color(0xFFFCA5A5),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(
-                                        Icons.delete_outline_rounded,
-                                        size: 14,
-                                        color: Color(0xFFEF4444),
+                            // Content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          appointment.title,
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: isCancelled
+                                                ? const Color(0xFF9CA3AF)
+                                                : const Color(0xFF111827),
+                                            decoration: isCancelled
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            letterSpacing: -0.3,
+                                            height: 1.2,
+                                          ),
+                                        ),
                                       ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Clear',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFFEF4444),
+                                      _buildStatusBadge(appointment.status),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: isCancelled
+                                              ? Colors.grey.shade200
+                                              : _getAppointmentColor(
+                                                  appointment.type,
+                                                ).withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.person_outline_rounded,
+                                          size: 16,
+                                          color: isCancelled
+                                              ? Colors.grey.shade500
+                                              : _getAppointmentColor(
+                                                  appointment.type,
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          appointment.doctor,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: isCancelled
+                                                ? Colors.grey.shade500
+                                                : const Color(0xFF374151),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
                                   ),
+                                  if (appointment.specialty != null &&
+                                      appointment.specialty!.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isCancelled
+                                            ? Colors.grey.shade100
+                                            : _getAppointmentColor(
+                                                appointment.type,
+                                              ).withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isCancelled
+                                              ? Colors.grey.shade300
+                                              : _getAppointmentColor(
+                                                  appointment.type,
+                                                ).withOpacity(0.4),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        appointment.specialty!,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: isCancelled
+                                              ? Colors.grey.shade600
+                                              : _getAppointmentColor(
+                                                  appointment.type,
+                                                ),
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        // Modern time and date section
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isCancelled
+                                  ? [Colors.grey.shade50, Colors.grey.shade100]
+                                  : [
+                                      _getAppointmentColor(
+                                        appointment.type,
+                                      ).withOpacity(0.08),
+                                      _getAppointmentColor(
+                                        appointment.type,
+                                      ).withOpacity(0.03),
+                                    ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isCancelled
+                                  ? Colors.grey.shade200
+                                  : _getAppointmentColor(
+                                      appointment.type,
+                                    ).withOpacity(0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isCancelled
+                                            ? Colors.grey.shade200
+                                            : _getAppointmentColor(
+                                                appointment.type,
+                                              ).withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.calendar_today_rounded,
+                                        size: 20,
+                                        color: isCancelled
+                                            ? Colors.grey.shade600
+                                            : _getAppointmentColor(
+                                                appointment.type,
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        DateFormat(
+                                          'EEE, d MMM',
+                                        ).format(appointment.fullDate),
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: isCancelled
+                                              ? Colors.grey.shade600
+                                              : const Color(0xFF374151),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            )
-                          else
-                            // Cancel button for active appointments
-                            TextButton.icon(
-                              onPressed: () => _cancelAppointment(appointment),
-                              style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFFEF4444),
+                              Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
+                                  horizontal: 14,
+                                  vertical: 10,
                                 ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                decoration: BoxDecoration(
+                                  gradient: isCancelled
+                                      ? LinearGradient(
+                                          colors: [
+                                            Colors.grey.shade400,
+                                            Colors.grey.shade500,
+                                          ],
+                                        )
+                                      : _getAppointmentGradient(
+                                          appointment.type,
+                                        ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isCancelled
+                                          ? Colors.grey.withOpacity(0.2)
+                                          : _getAppointmentColor(
+                                              appointment.type,
+                                            ).withOpacity(0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.access_time_rounded,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${appointment.time.format(context)} \u2022 ${appointment.duration}m',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              icon: const Icon(Icons.cancel_outlined, size: 14),
-                              label: const Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Action buttons
+                        if (isCancelled)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () =>
+                                  _deleteSingleAppointment(appointment),
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFEE2E2),
+                                      Color(0xFFFECDCD),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCA5A5),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(
+                                      Icons.delete_sweep_rounded,
+                                      size: 22,
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Clear Appointment',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFFDC2626),
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                        ],
-                      ),
-                    ],
+                          )
+                        else
+                          ElevatedButton.icon(
+                            onPressed: () => _cancelAppointment(appointment),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFFEF4444),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              minimumSize: const Size(double.infinity, 0),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: const BorderSide(
+                                  color: Color(0xFFEF4444),
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(Icons.cancel_outlined, size: 22),
+                            label: const Text(
+                              'Cancel Appointment',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1071,37 +1195,40 @@ class _AppointmentsPageState extends State<AppointmentsPage>
         : 'Cancelled';
 
     final icon = status == AppointmentStatus.confirmed
-        ? Icons.check_circle_rounded
+        ? Icons.verified_rounded
         : status == AppointmentStatus.pending
-        ? Icons.schedule_rounded
+        ? Icons.pending_rounded
         : Icons.cancel_rounded;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            color.withValues(alpha: 0.15),
-            color.withValues(alpha: 0.08),
-          ],
+          colors: [color, color.withOpacity(0.85)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: 16, color: Colors.white),
+          const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 11,
+            style: const TextStyle(
+              fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: color,
-              letterSpacing: 0.5,
+              color: Colors.white,
+              letterSpacing: 0.3,
             ),
           ),
         ],

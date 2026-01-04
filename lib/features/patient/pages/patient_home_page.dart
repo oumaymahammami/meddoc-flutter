@@ -12,6 +12,7 @@ import '../../../shared/pages/conversations_page.dart';
 import '../../../shared/pages/notifications_page.dart';
 import '../../video_consultation/models/video_consultation.dart';
 import '../../video_consultation/widgets/video_consultation_card.dart';
+import '../../video_consultation/pages/video_appointments_page.dart';
 
 /// ✅ New Creative Premium Palette
 class _MedColors {
@@ -207,7 +208,7 @@ class _PatientHomePageState extends State<PatientHomePage>
                         const SizedBox(height: 14),
                         _buildMiniInfoRow(),
                         const SizedBox(height: 16),
-                        _buildVideoConsultationSection(),
+                        _buildActiveVideoConsultationSection(),
                         const SizedBox(height: 16),
                         _buildQuickActionsCarousel(),
                         const SizedBox(height: 18),
@@ -253,9 +254,22 @@ class _PatientHomePageState extends State<PatientHomePage>
               .where('read', isEqualTo: false)
               .snapshots(),
           builder: (context, snapshot) {
-            final unreadCount = snapshot.hasData
-                ? snapshot.data!.docs.length
-                : 0;
+            // Count only notifications that would be visible (same filter as notifications page)
+            int unreadCount = 0;
+            if (snapshot.hasData) {
+              final now = DateTime.now();
+              unreadCount = snapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final type = data['type'] ?? '';
+                final sent = data['sent'] ?? false;
+
+                // For reminders, only count if sent is true
+                if (type == 'appointment_reminder') {
+                  return sent == true;
+                }
+                return true;
+              }).length;
+            }
             return _glassIconWithBadge(
               Icons.notifications_outlined,
               unreadCount,
@@ -478,14 +492,14 @@ class _PatientHomePageState extends State<PatientHomePage>
         : "N/A";
 
     final pills = [
-      ("Âge", age, _MedColors.violet, Icons.cake_outlined),
+      ("Age", age, _MedColors.violet, Icons.cake_outlined),
       (
-        "Médecins",
+        "Doctors",
         "${_myDoctors.length}",
         _MedColors.blue,
         Icons.medical_services_rounded,
       ),
-      ("Suivi", "Actif", _MedColors.emerald, Icons.analytics_rounded),
+      ("Tracking", "Active", _MedColors.emerald, Icons.analytics_rounded),
     ];
 
     return Padding(
@@ -547,9 +561,9 @@ class _PatientHomePageState extends State<PatientHomePage>
   }
 
   // =========================================================
-  // ✅ VIDEO CONSULTATION SECTION
+  // ✅ ACTIVE VIDEO CONSULTATION SECTION
   // =========================================================
-  Widget _buildVideoConsultationSection() {
+  Widget _buildActiveVideoConsultationSection() {
     final patientId = FirebaseAuth.instance.currentUser?.uid;
     if (patientId == null) return const SizedBox.shrink();
 
@@ -567,23 +581,23 @@ class _PatientHomePageState extends State<PatientHomePage>
           return const SizedBox.shrink();
         }
 
-        // Sort by scheduled time
-        final consultations = snapshot.data!.docs.map((doc) {
-          return VideoConsultation.fromFirestore(doc);
-        }).toList();
-
-        consultations.sort(
-          (a, b) => a.scheduledTime.compareTo(b.scheduledTime),
-        );
-
-        // Get the next upcoming consultation
+        // Get active consultations only
         final now = DateTime.now();
-        final nextConsultation = consultations.firstWhere(
-          (c) =>
-              c.scheduledTime.isAfter(now) ||
-              c.status == VideoConsultationStatus.inProgress ||
-              c.status == VideoConsultationStatus.patientWaiting,
-          orElse: () => consultations.first,
+        final activeConsultations = snapshot.data!.docs
+            .map((doc) => VideoConsultation.fromFirestore(doc))
+            .where((c) {
+              return c.endTime.isAfter(now) ||
+                  c.status == VideoConsultationStatus.inProgress ||
+                  c.status == VideoConsultationStatus.patientWaiting;
+            })
+            .toList();
+
+        if (activeConsultations.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        activeConsultations.sort(
+          (a, b) => a.scheduledTime.compareTo(b.scheduledTime),
         );
 
         return Column(
@@ -607,7 +621,7 @@ class _PatientHomePageState extends State<PatientHomePage>
                   ),
                   const SizedBox(width: 10),
                   const Text(
-                    'Video Consultation',
+                    'Active Video Consultation',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w900,
@@ -619,9 +633,173 @@ class _PatientHomePageState extends State<PatientHomePage>
             ),
             const SizedBox(height: 12),
             VideoConsultationCard(
-              consultation: nextConsultation,
+              consultation: activeConsultations.first,
               isPatient: true,
             ),
+          ],
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // ✅ VIDEO CONSULTATION SECTION (OLD - KEEP FOR REFERENCE)
+  // =========================================================
+  Widget _buildVideoConsultationSection() {
+    final patientId = FirebaseAuth.instance.currentUser?.uid;
+    if (patientId == null) return const SizedBox.shrink();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videoConsultations')
+          .where('patientId', isEqualTo: patientId)
+          .where(
+            'status',
+            whereIn: [
+              'scheduled',
+              'patient_waiting',
+              'in_progress',
+              'completed',
+            ],
+          )
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Get all consultations
+        final now = DateTime.now();
+        final allConsultations = snapshot.data!.docs
+            .map((doc) => VideoConsultation.fromFirestore(doc))
+            .toList();
+
+        // Separate active and completed consultations
+        final activeConsultations = allConsultations.where((c) {
+          return (c.endTime.isAfter(now) ||
+                  c.status == VideoConsultationStatus.inProgress ||
+                  c.status == VideoConsultationStatus.patientWaiting) &&
+              c.status != VideoConsultationStatus.completed;
+        }).toList();
+
+        final completedConsultations = allConsultations.where((c) {
+          return c.status == VideoConsultationStatus.completed;
+        }).toList();
+
+        if (activeConsultations.isEmpty && completedConsultations.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        activeConsultations.sort(
+          (a, b) => a.scheduledTime.compareTo(b.scheduledTime),
+        );
+
+        completedConsultations.sort(
+          (a, b) => b.scheduledTime.compareTo(a.scheduledTime),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (activeConsultations.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const VideoAppointmentsPage(isDoctor: false),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7C3AED).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.video_call_rounded,
+                            color: Color(0xFF7C3AED),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Video Consultations',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: _MedColors.text,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              VideoConsultationCard(
+                consultation: activeConsultations.first,
+                isPatient: true,
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (completedConsultations.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF10B981),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Completed Consultations',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: _MedColors.text,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...completedConsultations
+                  .take(3)
+                  .map(
+                    (consultation) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: VideoConsultationCard(
+                        consultation: consultation,
+                        isPatient: true,
+                      ),
+                    ),
+                  ),
+            ],
           ],
         );
       },
@@ -634,7 +812,7 @@ class _PatientHomePageState extends State<PatientHomePage>
   Widget _buildQuickActionsCarousel() {
     final actions = [
       (
-        "Trouver un médecin",
+        "Find a Doctor",
         Icons.search_rounded,
         _MedColors.blue,
         () {
@@ -642,11 +820,24 @@ class _PatientHomePageState extends State<PatientHomePage>
         },
       ),
       (
-        "Rendez-vous",
+        "Appointment",
         Icons.calendar_month_rounded,
         _MedColors.violet,
         () {
           context.push('/patient/appointments');
+        },
+      ),
+      (
+        "Video Consultations",
+        Icons.video_call_rounded,
+        const Color(0xFF7C3AED),
+        () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  const VideoAppointmentsPage(isDoctor: false),
+            ),
+          );
         },
       ),
       (
@@ -665,7 +856,7 @@ class _PatientHomePageState extends State<PatientHomePage>
         },
       ),
       (
-        "Médicaments",
+        "Medications",
         Icons.medication_rounded,
         _MedColors.orange,
         () {
@@ -820,13 +1011,13 @@ class _PatientHomePageState extends State<PatientHomePage>
               Icons.calendar_today_rounded,
             ),
             (
-              "Médicaments",
+              "Medications",
               "${stats['medications']}",
               _MedColors.emerald,
               Icons.medication_rounded,
             ),
             (
-              "Médecins",
+              "Doctors",
               "${stats['doctors']}",
               _MedColors.violet,
               Icons.medical_services_rounded,
@@ -1034,7 +1225,7 @@ class _PatientHomePageState extends State<PatientHomePage>
   }
 
   // =========================================================
-  // ✅ UPCOMING TIMELINE (MODERN)
+  // ✅ TODAY'S APPOINTMENTS SECTION
   // =========================================================
   Widget _buildUpcomingTimeline() {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -1045,45 +1236,138 @@ class _PatientHomePageState extends State<PatientHomePage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle("Upcoming", "Timeline"),
+          _sectionTitle("Today's", "Appointments"),
           const SizedBox(height: 14),
 
-          // Stream upcoming appointments
+          // Stream TODAY's appointments
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('appointments')
                 .where('patientId', isEqualTo: userId)
-                .where('status', whereIn: ['pending', 'confirmed'])
-                .orderBy('dateTime', descending: false)
-                .limit(3)
+                .where(
+                  'status',
+                  whereIn: [
+                    'pending',
+                    'PENDING',
+                    'confirmed',
+                    'CONFIRMED',
+                    'booked',
+                    'BOOKED',
+                    'scheduled',
+                    'SCHEDULED',
+                  ],
+                )
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return _timelineShimmer();
               }
 
-              final appointments = snapshot.data?.docs ?? [];
+              // Debug: Check if we have data
+              print(
+                '📅 Appointments snapshot: hasData=${snapshot.hasData}, error=${snapshot.error}',
+              );
+              print('📅 Documents count: ${snapshot.data?.docs.length ?? 0}');
 
-              if (appointments.isEmpty) {
-                return Column(
-                  children: [
-                    _emptyAppointmentCard(),
-                    const SizedBox(height: 12),
-                    _reminderCard(),
-                  ],
+              final allAppointments = snapshot.data?.docs ?? [];
+
+              // Filter for TODAY's appointments only
+              final now = DateTime.now();
+              final startOfDay = DateTime(now.year, now.month, now.day);
+              final endOfDay = DateTime(
+                now.year,
+                now.month,
+                now.day,
+                23,
+                59,
+                59,
+              );
+
+              print('🕐 NOW: $now');
+              print('🌅 START OF DAY: $startOfDay');
+              print('🌆 END OF DAY: $endOfDay');
+
+              // Debug: Print ALL appointments with their dates
+              for (final doc in allAppointments) {
+                final data = doc.data() as Map<String, dynamic>;
+                final startTime =
+                    (data['startTime'] as Timestamp?)?.toDate().toLocal();
+                final dateTime =
+                    (data['dateTime'] as Timestamp?)?.toDate().toLocal();
+                final actualTime = startTime ?? dateTime;
+                final status = data['status'];
+                print(
+                  '  📋 Raw Appointment: status=$status, startTime=$startTime, dateTime=$dateTime',
                 );
               }
 
+              final todayAppointments = allAppointments.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final startTime =
+                    (data['startTime'] as Timestamp?)?.toDate().toLocal();
+                final dateTime =
+                    (data['dateTime'] as Timestamp?)?.toDate().toLocal();
+                final actualTime = startTime ?? dateTime;
+
+                if (actualTime == null) {
+                  print('  ⚠️ Appointment has NULL startTime and dateTime');
+                  return false;
+                }
+
+                // Check if appointment is today (inclusive of boundaries)
+                final isAfterOrEqualStart = !actualTime.isBefore(startOfDay);
+                final isBeforeOrEqualEnd = !actualTime.isAfter(endOfDay);
+                final isToday = isAfterOrEqualStart && isBeforeOrEqualEnd;
+
+                print('  🔍 Checking: $actualTime');
+                print(
+                  '     isAfterOrEqualStart=$isAfterOrEqualStart, isBeforeOrEqualEnd=$isBeforeOrEqualEnd, isToday=$isToday',
+                );
+
+                return isToday;
+              }).toList();
+
+              print(
+                '📅 Today\'s appointments count: ${todayAppointments.length}',
+              );
+
+              final todayData = todayAppointments
+                  .map((doc) => doc.data() as Map<String, dynamic>)
+                  .toList();
+
+              // Next appointment preview (first sorted)
+              final nextAppointment =
+                  todayData.isNotEmpty ? todayData.first : null;
+
+              // Sort by time
+              todayAppointments.sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aStartTime =
+                    (aData['startTime'] as Timestamp?)?.toDate().toLocal();
+                final aDateTime =
+                    (aData['dateTime'] as Timestamp?)?.toDate().toLocal();
+                final aTime = aStartTime ?? aDateTime ?? now;
+                final bStartTime =
+                    (bData['startTime'] as Timestamp?)?.toDate().toLocal();
+                final bDateTime =
+                    (bData['dateTime'] as Timestamp?)?.toDate().toLocal();
+                final bTime = bStartTime ?? bDateTime ?? now;
+                return aTime.compareTo(bTime);
+              });
+
               return Column(
                 children: [
-                  ...appointments.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _upcomingAppointmentCard(data),
-                    );
-                  }),
-                  if (appointments.length < 3) _reminderCard(),
+                  _todaySummaryCard(
+                    todayData,
+                    nextAppointment,
+                    onTap: () => _showTodayAppointmentsSheet(todayData),
+                  ),
+                  const SizedBox(height: 12),
+                  if (todayData.isEmpty)
+                    _emptyTodayAppointmentCard()
+                  else
+                    _todayAppointmentCard(todayData.first),
                 ],
               );
             },
@@ -1166,12 +1450,12 @@ class _PatientHomePageState extends State<PatientHomePage>
     );
   }
 
-  Widget _emptyAppointmentCard() {
+  Widget _emptyTodayAppointmentCard() {
     return _timelineItem(
       color: _MedColors.blue,
       icon: Icons.event_available_rounded,
-      title: "No appointments scheduled",
-      subtitle: "Find and book an appointment with a doctor in a few clicks.",
+      title: "No appointments today",
+      subtitle: "You don't have any appointments scheduled for today.",
       onTap: () => context.push('/patient/search'),
     );
   }
@@ -1182,7 +1466,345 @@ class _PatientHomePageState extends State<PatientHomePage>
       icon: Icons.notifications_active_rounded,
       title: "Reminders enabled ✅",
       subtitle:
-          "You'll receive notifications 24h and 2h before your appointments.",
+          "You'll receive notifications 1h, 30min, 15min, and 5min before appointments.",
+    );
+  }
+
+  Widget _todaySummaryCard(
+    List<Map<String, dynamic>> appointments,
+    Map<String, dynamic>? nextAppointment, {
+    required VoidCallback onTap,
+  }) {
+    DateTime? nextTime;
+    if (nextAppointment != null) {
+      final start =
+          (nextAppointment['startTime'] as Timestamp?)?.toDate().toLocal();
+      final dt =
+          (nextAppointment['dateTime'] as Timestamp?)?.toDate().toLocal();
+      nextTime = start ?? dt;
+    }
+
+    final hasAppointments = appointments.isNotEmpty;
+    final badgeText = hasAppointments
+        ? '${appointments.length} today'
+        : 'No appointments today';
+    final timeText =
+        hasAppointments && nextTime != null ? DateFormat('HH:mm').format(nextTime) : 'Tap to schedule';
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF2563EB),
+              Color(0xFF7C3AED),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2563EB).withOpacity(0.24),
+              blurRadius: 24,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.16),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.calendar_today_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hasAppointments
+                        ? "Today's appointments"
+                        : "You're all clear today",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: Colors.white70,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        timeText,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_up_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTodayAppointmentsSheet(
+    List<Map<String, dynamic>> appointments,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 4),
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.event_available_rounded,
+                            color: _MedColors.blue),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            "Today's appointments",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: _MedColors.text,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: appointments.isEmpty
+                        ? Center(
+                            child: _emptyTodayAppointmentCard(),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            itemCount: appointments.length,
+                            itemBuilder: (context, index) {
+                              final data = appointments[index];
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 12.0),
+                                child: _todayAppointmentCard(data),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _todayAppointmentCard(Map<String, dynamic> appointmentData) {
+    final doctorId = appointmentData['doctorId'] as String?;
+    final startTime =
+        (appointmentData['startTime'] as Timestamp?)?.toDate().toLocal();
+    final dateTime =
+        (appointmentData['dateTime'] as Timestamp?)?.toDate().toLocal();
+    final actualTime = startTime ?? dateTime;
+    final status =
+        (appointmentData['status'] as String?)?.toString().toLowerCase();
+
+    if (doctorId == null || actualTime == null) return const SizedBox.shrink();
+
+    // Format time for today
+    String timeText = "Today at ${DateFormat('HH:mm').format(actualTime)}";
+
+    Color statusColor = _MedColors.blue;
+    IconData statusIcon = Icons.schedule_rounded;
+
+    if (status == 'confirmed') {
+      statusColor = _MedColors.emerald;
+      statusIcon = Icons.check_circle_outline_rounded;
+    } else if (status == 'pending' ||
+        status == 'booked' ||
+        status == 'scheduled') {
+      statusColor = _MedColors.orange;
+      statusIcon = Icons.pending_outlined;
+    }
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('doctors')
+          .doc(doctorId)
+          .get(),
+      builder: (context, snapshot) {
+        final doctorData = snapshot.data?.data() as Map<String, dynamic>?;
+        final doctorName = doctorData?['fullName'] as String? ?? 'Doctor';
+        final specialty =
+            doctorData?['specialtyName'] as String? ?? 'Consultation';
+
+        return InkWell(
+          onTap: () => context.push('/patient/appointments'),
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  statusColor.withOpacity(0.08),
+                  statusColor.withOpacity(0.02),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: statusColor.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: statusColor.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 26),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        doctorName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: _MedColors.text,
+                          fontSize: 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        specialty,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 14,
+                            color: _MedColors.subText,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            timeText,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _MedColors.subText,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _MedColors.muted,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1461,7 +2083,7 @@ class _PatientHomePageState extends State<PatientHomePage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle("Mes médecins", "Suivi"),
+          _sectionTitle("My Doctors", "Follow-up"),
           const SizedBox(height: 10),
 
           // Premium Card with Click to View All

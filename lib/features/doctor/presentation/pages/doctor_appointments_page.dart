@@ -23,7 +23,7 @@ class DoctorAppointmentsPage extends ConsumerWidget {
 final _doctorIdProvider = Provider<String>((ref) => '');
 final _serviceProvider = Provider((ref) => DoctorAppointmentsService());
 
-enum AppointmentTab { pending, confirmed, history }
+enum AppointmentTab { pending, confirmed, done, history }
 
 final _tabProvider = StateProvider<AppointmentTab>(
   (ref) => AppointmentTab.pending,
@@ -49,6 +49,8 @@ final _appointmentsStreamProvider =
           statuses = ['pending', 'PENDING'];
         } else if (tab == AppointmentTab.confirmed) {
           statuses = ['confirmed', 'CONFIRMED'];
+        } else if (tab == AppointmentTab.done) {
+          statuses = ['completed', 'COMPLETED'];
         } else {
           statuses = ['cancelled', 'rejected', 'CANCELLED', 'REJECTED'];
         }
@@ -133,6 +135,8 @@ class _TabBar extends ConsumerWidget {
         return const Color(0xFF8B5CF6);
       case AppointmentTab.confirmed:
         return const Color(0xFF22C55E);
+      case AppointmentTab.done:
+        return const Color(0xFF10B981);
       case AppointmentTab.history:
         return const Color(0xFFEF4444);
     }
@@ -192,6 +196,8 @@ class _TabBar extends ConsumerWidget {
         return 'Pending';
       case AppointmentTab.confirmed:
         return 'Confirmed';
+      case AppointmentTab.done:
+        return 'Done';
       case AppointmentTab.history:
         return 'History';
     }
@@ -463,6 +469,12 @@ class _AppointmentCard extends ConsumerWidget {
             Icons.schedule,
             (s, a, c, r) => _showRescheduleSheet(c, r, a),
           ),
+          _action(
+            'Done',
+            const Color(0xFF10B981),
+            Icons.check_circle,
+            (s, a, c, r) => _markAsDone(c, r, a),
+          ),
         ];
       case AppointmentStatus.cancelled:
       case AppointmentStatus.completed:
@@ -489,6 +501,78 @@ class _AppointmentCard extends ConsumerWidget {
             (s, a, c, r) => _showRescheduleSheet(c, r, a),
           ),
         ];
+    }
+  }
+
+  Future<void> _markAsDone(
+    BuildContext context,
+    WidgetRef ref,
+    Appointment appointment,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
+            SizedBox(width: 12),
+            Text(
+              'Mark as Complete',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        content: Text(
+          'Mark this appointment with ${appointment.patientName ?? "patient"} as completed?',
+          style: const TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Mark Done'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ref
+          .read(_serviceProvider)
+          .completeAppointment(appointment.id, appointment.patientId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('Appointment marked as completed'),
+              ],
+            ),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
     }
   }
 
@@ -756,7 +840,7 @@ class _StatusBadge extends StatelessWidget {
       case AppointmentStatus.rejected:
         return 'Rejected';
       case AppointmentStatus.completed:
-        return 'Completed';
+        return 'Done';
     }
   }
 }

@@ -262,6 +262,7 @@ class _DoctorCompleteProfileScreenState
       await firestore.collection('doctors').doc(uid).set({
         'uid': uid,
         'firstName': _fullNameController.text,
+        'fullName': _fullNameController.text, // Add fullName for consistency
         'bio': _bioController.text.isEmpty ? null : _bioController.text,
         'specialty': _specialtyController.text,
         'phone': _phoneController.text,

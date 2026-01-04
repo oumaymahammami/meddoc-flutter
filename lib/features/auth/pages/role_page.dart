@@ -31,7 +31,7 @@ class RolePage extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () => context.go('/doctor'),
                 icon: const Icon(Icons.medical_services),
-                label: const Text('Médecin'),
+                label: const Text('Doctor'),
               ),
             ),
           ],

@@ -161,7 +161,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Trouver un praticien",
+                    "Find a Practitioner",
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
@@ -170,7 +170,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    "Recherchez par spécialité, ville ou nom",
+                    "Search by specialty, city or name",
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white70,
@@ -203,7 +203,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
         onChanged: _performSearch,
         style: const TextStyle(fontWeight: FontWeight.w700, color: _text),
         decoration: InputDecoration(
-          hintText: "Spécialité, nom, symptôme...",
+          hintText: "Specialty, name, symptom...",
           hintStyle: const TextStyle(
             color: _muted,
             fontWeight: FontWeight.w600,
@@ -238,7 +238,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
           children: [
             if (filters.specialtyId != null)
               _modernChip(
-                "Spécialité",
+                "Specialty",
                 () => _updateFilters(filters.clearFilter('specialty')),
               ),
 
@@ -264,7 +264,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
 
             if (filters.onlyVerified)
               _modernChip(
-                "Vérifié",
+                "Verified",
                 () => _updateFilters(filters.copyWith(onlyVerified: false)),
               ),
 
@@ -333,7 +333,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Spécialités populaires",
+              "Popular Specialties",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
@@ -454,7 +454,7 @@ class _DoctorSearchPageState extends ConsumerState<DoctorSearchPage> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      "Aucun praticien trouvé",
+                      "No practitioner found",
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -1166,7 +1166,7 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
     return Column(
       children: [
         SwitchListTile(
-          title: const Text("Accepte nouveaux patients"),
+          title: const Text("Accepting new patients"),
           value: _localFilters.onlyAcceptingNewPatients,
           onChanged: (value) {
             setState(

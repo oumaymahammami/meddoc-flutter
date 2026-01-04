@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../models/video_consultation.dart';
 import '../pages/waiting_room_page.dart';
+import '../pages/doctor_waiting_room_page.dart';
 import '../pages/video_call_page.dart';
 import '../pages/consultation_documents_page.dart';
 
@@ -18,6 +19,13 @@ class VideoConsultationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _buildCard(context, consultation);
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    VideoConsultation currentConsultation,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -82,28 +90,28 @@ class VideoConsultationCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _buildStatusBadge(),
+                    _buildStatusBadge(currentConsultation),
                   ],
                 ),
                 const SizedBox(height: 16),
-                if (!isPatient) _buildSpecialtyChip(),
+                if (!isPatient) _buildSpecialtyChip(currentConsultation),
                 _buildInfoRow(
                   Icons.person_outline_rounded,
-                  isPatient ? consultation.doctorSpecialty : 'Patient',
+                  isPatient ? currentConsultation.doctorSpecialty : 'Patient',
                 ),
                 const SizedBox(height: 8),
                 _buildInfoRow(
                   Icons.calendar_today_rounded,
-                  DateFormat('MMM dd, yyyy').format(consultation.scheduledTime),
+                  DateFormat(
+                    'MMM dd, yyyy',
+                  ).format(currentConsultation.scheduledTime),
                 ),
                 const SizedBox(height: 8),
                 _buildInfoRow(
                   Icons.access_time_rounded,
-                  '${DateFormat('HH:mm').format(consultation.scheduledTime)} - ${DateFormat('HH:mm').format(consultation.endTime)}',
+                  '${DateFormat('HH:mm').format(currentConsultation.scheduledTime)} - ${DateFormat('HH:mm').format(currentConsultation.endTime)}',
                 ),
-                if (consultation.status ==
-                        VideoConsultationStatus.patientWaiting &&
-                    !isPatient) ...[
+                if (currentConsultation.patientInWaitingRoom && !isPatient) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -147,14 +155,14 @@ class VideoConsultationCard extends StatelessWidget {
                 bottomRight: Radius.circular(20),
               ),
             ),
-            child: _buildActionButton(context),
+            child: _buildActionButton(context, currentConsultation),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusBadge() {
+  Widget _buildStatusBadge(VideoConsultation consultation) {
     String label;
     Color color;
 
@@ -198,7 +206,7 @@ class VideoConsultationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildSpecialtyChip() {
+  Widget _buildSpecialtyChip(VideoConsultation consultation) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -236,7 +244,10 @@ class VideoConsultationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(BuildContext context) {
+  Widget _buildActionButton(
+    BuildContext context,
+    VideoConsultation consultation,
+  ) {
     String buttonText;
     VoidCallback? onPressed;
     IconData icon;
@@ -261,6 +272,14 @@ class VideoConsultationCard extends StatelessWidget {
       buttonText = 'Start Call';
       icon = Icons.play_arrow_rounded;
       buttonColor = Colors.green;
+      textColor = Colors.white;
+      onPressed = () => _startCall(context);
+    } else if (!isPatient &&
+        consultation.status == VideoConsultationStatus.scheduled) {
+      // Doctors can always enter the video call anytime
+      buttonText = 'Start Call';
+      icon = Icons.video_call_rounded;
+      buttonColor = const Color(0xFF10B981);
       textColor = Colors.white;
       onPressed = () => _startCall(context);
     } else if (isPatient &&
@@ -334,23 +353,13 @@ class VideoConsultationCard extends StatelessWidget {
   }
 
   void _startCall(BuildContext context) async {
-    // Update status to inProgress
-    await FirebaseFirestore.instance
-        .collection('videoConsultations')
-        .doc(consultation.id)
-        .update({
-          'status': 'in_progress',
-          'callStartedAt': FieldValue.serverTimestamp(),
-          'doctorReady': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
+    // For doctors, first show equipment testing page
     if (context.mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) =>
-              VideoCallPage(consultation: consultation, isDoctor: true),
+              DoctorWaitingRoomPage(consultation: consultation),
         ),
       );
     }

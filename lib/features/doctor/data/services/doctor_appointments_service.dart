@@ -241,7 +241,7 @@ class DoctorAppointmentsService {
         'receiverRole': 'patient',
         'appointmentId': apt.id,
         'title': 'Rappel',
-        'body': 'RDV à ${fmtHm.format(start)} avec votre médecin.',
+        'body': 'Appointment at ${fmtHm.format(start)} with your doctor.',
         'sent': false,
         'sendAt': t,
         'createdAt': DateTime.now(),
@@ -255,7 +255,7 @@ class DoctorAppointmentsService {
         'receiverRole': 'doctor',
         'appointmentId': apt.id,
         'title': 'Rappel',
-        'body': 'Vous avez un RDV à $doctorTime dans 30 min.',
+        'body': 'You have an appointment at $doctorTime in 30 min.',
         'sent': false,
         'sendAt': t,
         'createdAt': DateTime.now(),
@@ -277,6 +277,31 @@ class DoctorAppointmentsService {
       batch.delete(doc.reference);
     }
     await batch.commit();
+  }
+
+  /// Mark appointment as completed and increment patient's consultation count
+  /// Mark appointment as completed
+  /// Note: Patient's totalConsultations will be calculated dynamically by counting
+  /// completed appointments, so we don't need to update the patient doc here
+  Future<void> completeAppointment(
+    String appointmentId,
+    String patientId,
+  ) async {
+    try {
+      // Update appointment status only
+      await _appointmentsRef.doc(appointmentId).update({
+        'status': 'COMPLETED',
+        'completedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await _clearPendingNotifications(appointmentId);
+
+      print('✅ Appointment $appointmentId marked as completed');
+    } catch (e) {
+      print('❌ Error completing appointment: $e');
+      rethrow;
+    }
   }
 }
 

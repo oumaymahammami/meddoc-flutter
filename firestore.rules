@@ -127,7 +127,9 @@ service cloud.firestore {
       allow update: if (signedIn() && resource.data.patientId == request.auth.uid)
                  || (isDoctor() && resource.data.doctorId == request.auth.uid);
 
-      allow delete: if signedIn() && resource.data.patientId == request.auth.uid;
+      // Allow both patients and doctors to delete appointments
+      allow delete: if (signedIn() && resource.data.patientId == request.auth.uid)
+                 || (isDoctor() && resource.data.doctorId == request.auth.uid);
     }
 
     // ---------- MEDICAL REPORTS ----------
@@ -176,18 +178,27 @@ service cloud.firestore {
 
       // Messages subcollection
       match /messages/{messageId} {
+        function conversationData() {
+          return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+        }
+        
+        function isParticipant() {
+          return request.auth.uid == conversationData().doctorId || 
+                 request.auth.uid == conversationData().patientId;
+        }
+        
         // Read messages if user is participant of the conversation
-        allow read: if signedIn() && 
-          (request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.doctorId || 
-           request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.patientId);
+        allow read: if signedIn() && isParticipant();
         
         // Create message if user is sender and participant
         allow create: if signedIn() && 
           request.resource.data.senderId == request.auth.uid &&
-          (request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.doctorId || 
-           request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.patientId);
+          isParticipant();
         
-        allow update, delete: if false;
+        // Allow senders to delete their own messages (simplified - only check if sender)
+        allow delete: if signedIn() && resource.data.senderId == request.auth.uid;
+
+        allow update: if false;
       }
     }
 

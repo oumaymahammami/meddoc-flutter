@@ -225,7 +225,7 @@ class Availability extends Equatable {
     if (difference.inHours < 24) return 'Aujourd\'hui';
     if (difference.inDays < 7) return 'Cette semaine';
     if (difference.inDays < 14) return 'Prochaine semaine';
-    return 'Dans ${difference.inDays} jours';
+    return 'In ${difference.inDays} days';
   }
 
   @override

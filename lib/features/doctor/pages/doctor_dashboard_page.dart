@@ -14,7 +14,7 @@ class DoctorDashboardPage extends ConsumerWidget {
 
     if (uid == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('MedDoc - Médecin')),
+        appBar: AppBar(title: const Text('MedDoc - Doctor')),
         body: const Center(child: Text('User not authenticated')),
       );
     }
@@ -22,7 +22,7 @@ class DoctorDashboardPage extends ConsumerWidget {
     final profileAsync = ref.watch(doctorProfileProvider(uid));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MedDoc - Médecin'), elevation: 0),
+      appBar: AppBar(title: const Text('MedDoc - Doctor'), elevation: 0),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(

@@ -126,7 +126,7 @@ class _ChatPageState extends State<ChatPage> {
         'senderName': senderName,
         'senderRole': senderRole,
         'conversationId': widget.conversationId,
-        'title': 'Nouveau message de $senderRole $senderName',
+        'title': 'New message from $senderRole $senderName',
         'message': message,
         'read': false,
         'createdAt': FieldValue.serverTimestamp(),
@@ -282,70 +282,90 @@ class _ChatPageState extends State<ChatPage> {
                             const SizedBox(width: 8),
                           ],
                           Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: isMe
-                                    ? const LinearGradient(
-                                        colors: [
-                                          Color(0xFF2E63D9),
-                                          Color(0xFF2D9CDB),
-                                        ],
-                                      )
-                                    : null,
-                                color: isMe ? null : Colors.white,
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(20),
-                                  topRight: const Radius.circular(20),
-                                  bottomLeft: Radius.circular(isMe ? 20 : 4),
-                                  bottomRight: Radius.circular(isMe ? 4 : 20),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onLongPress: isMe
+                                  ? () => _showDeleteMessageDialog(doc)
+                                  : null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color:
-                                        (isMe
-                                                ? const Color(0xFF2E63D9)
-                                                : Colors.black)
-                                            .withOpacity(0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
+                                decoration: BoxDecoration(
+                                  gradient: isMe
+                                      ? const LinearGradient(
+                                          colors: [
+                                            Color(0xFF2E63D9),
+                                            Color(0xFF2D9CDB),
+                                          ],
+                                        )
+                                      : null,
+                                  color: isMe ? null : Colors.white,
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(20),
+                                    topRight: const Radius.circular(20),
+                                    bottomLeft: Radius.circular(isMe ? 20 : 4),
+                                    bottomRight: Radius.circular(isMe ? 4 : 20),
                                   ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: isMe
-                                    ? CrossAxisAlignment.end
-                                    : CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    text,
-                                    style: TextStyle(
-                                      color: isMe
-                                          ? Colors.white
-                                          : const Color(0xFF111827),
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  if (createdAt != null) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      DateFormat('HH:mm').format(createdAt),
-                                      style: TextStyle(
-                                        color: isMe
-                                            ? Colors.white.withOpacity(0.7)
-                                            : Colors.grey[500],
-                                        fontSize: 11,
-                                      ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          (isMe
+                                                  ? const Color(0xFF2E63D9)
+                                                  : Colors.black)
+                                              .withOpacity(0.1),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
                                     ),
                                   ],
-                                ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: isMe
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      text,
+                                      style: TextStyle(
+                                        color: isMe
+                                            ? Colors.white
+                                            : const Color(0xFF111827),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (createdAt != null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        DateFormat('HH:mm').format(createdAt),
+                                        style: TextStyle(
+                                          color: isMe
+                                              ? Colors.white.withOpacity(0.7)
+                                              : Colors.grey[500],
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
+                          if (isMe) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _showDeleteMessageDialog(doc),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.delete_outline,
+                                  size: 16,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     );
@@ -414,5 +434,135 @@ class _ChatPageState extends State<ChatPage> {
         ],
       ),
     );
+  }
+
+  // Show delete message confirmation dialog
+  Future<void> _showDeleteMessageDialog(QueryDocumentSnapshot doc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: Row(
+          children: const [
+            Icon(Icons.delete_rounded, color: Color(0xFFEF4444), size: 28),
+            SizedBox(width: 12),
+            Text(
+              'Delete Message?',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 20,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This message will be permanently deleted for everyone.',
+          style: TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(widget.conversationId)
+          .collection('messages')
+          .doc(doc.id)
+          .delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text(
+                  'Message deleted successfully',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Error: $e',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
   }
 }

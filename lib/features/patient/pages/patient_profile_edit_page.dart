@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -115,6 +116,25 @@ class _PatientProfileEditPageState extends State<PatientProfileEditPage>
       );
 
       await _patientRepo.updateProfile(updatedProfile);
+
+      // Update patient name in all their reviews if name changed
+      final newName = _nameController.text.trim();
+      if (newName != _originalProfile!.name) {
+        final reviewsQuery = await FirebaseFirestore.instance
+            .collectionGroup('reviews')
+            .where('patientId', isEqualTo: user.uid)
+            .get();
+
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in reviewsQuery.docs) {
+          batch.update(doc.reference, {'patientName': newName});
+        }
+
+        // Commit batch update
+        if (reviewsQuery.docs.isNotEmpty) {
+          await batch.commit();
+        }
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

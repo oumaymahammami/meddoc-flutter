@@ -7,6 +7,7 @@ import '../../../../shared/pages/conversations_page.dart';
 import '../../../../shared/pages/notifications_page.dart';
 import '../../../video_consultation/models/video_consultation.dart';
 import '../../../video_consultation/widgets/video_consultation_card.dart';
+import '../../../video_consultation/pages/video_appointments_page.dart';
 
 /// Doctor Dashboard Screen - Premium Design
 /// Main screen after profile is complete
@@ -237,6 +238,87 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
     return 'N/A';
   }
 
+  Future<void> _deleteAppointment(Map<String, dynamic> apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Color(0xFFEF4444), size: 24),
+            SizedBox(width: 12),
+            Text(
+              'Delete Appointment?',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete the appointment with ${apt['patientName']}? This action cannot be undone.',
+          style: const TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Find and delete the appointment from Firestore
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return;
+
+        final appointmentsQuery = await FirebaseFirestore.instance
+            .collection('appointments')
+            .where('doctorId', isEqualTo: uid)
+            .where('patientId', isEqualTo: apt['patientId'])
+            .get();
+
+        for (final doc in appointmentsQuery.docs) {
+          await doc.reference.delete();
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Appointment deleted successfully'),
+                ],
+              ),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          _loadAppointments(); // Reload appointments
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting appointment: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
@@ -333,8 +415,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
                 _buildStatsGrid(isMobile),
                 const SizedBox(height: 24),
 
-                // Video Consultations
-                _buildVideoConsultationSection(),
+                // Active Video Consultations
+                _buildActiveVideoConsultationSection(),
                 const SizedBox(height: 24),
 
                 // Upcoming Appointments
@@ -656,7 +738,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
     final reviewCount = _doctorData['reviewCount'] ?? 0;
 
     if (averageRating == null || reviewCount == 0) {
-      return 'Nouveau';
+      return 'New';
     }
 
     final rating = averageRating is num ? averageRating.toDouble() : 0.0;
@@ -1030,10 +1112,12 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
     }
   }
 
-  // ===== VIDEO CONSULTATION SECTION =====
-  Widget _buildVideoConsultationSection() {
+  // ===== ACTIVE VIDEO CONSULTATION SECTION =====
+  Widget _buildActiveVideoConsultationSection() {
     final doctorId = FirebaseAuth.instance.currentUser?.uid;
     if (doctorId == null) return const SizedBox.shrink();
+
+    final now = DateTime.now();
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -1049,23 +1133,22 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
           return const SizedBox.shrink();
         }
 
-        // Sort by scheduled time
-        final consultations = snapshot.data!.docs.map((doc) {
-          return VideoConsultation.fromFirestore(doc);
-        }).toList();
+        // Get active consultations only
+        final activeConsultations = snapshot.data!.docs
+            .map((doc) => VideoConsultation.fromFirestore(doc))
+            .where((c) {
+              return c.endTime.isAfter(now) ||
+                  c.status == VideoConsultationStatus.inProgress ||
+                  c.status == VideoConsultationStatus.patientWaiting;
+            })
+            .toList();
 
-        consultations.sort(
+        if (activeConsultations.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        activeConsultations.sort(
           (a, b) => a.scheduledTime.compareTo(b.scheduledTime),
-        );
-
-        // Get the next upcoming consultation
-        final now = DateTime.now();
-        final nextConsultation = consultations.firstWhere(
-          (c) =>
-              c.scheduledTime.isAfter(now) ||
-              c.status == VideoConsultationStatus.inProgress ||
-              c.status == VideoConsultationStatus.patientWaiting,
-          orElse: () => consultations.first,
         );
 
         return Column(
@@ -1089,19 +1172,12 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
                   ),
                   const SizedBox(width: 10),
                   const Text(
-                    'Video Consultation',
+                    'Active Video Consultation',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF111827),
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      // TODO: Navigate to all video consultations
-                    },
-                    child: const Text('See All'),
                   ),
                 ],
               ),
@@ -1110,10 +1186,179 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: VideoConsultationCard(
-                consultation: nextConsultation,
+                consultation: activeConsultations.first,
                 isPatient: false,
               ),
             ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ===== VIDEO CONSULTATION SECTION =====
+  Widget _buildVideoConsultationSection() {
+    final doctorId = FirebaseAuth.instance.currentUser?.uid;
+    if (doctorId == null) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videoConsultations')
+          .where('doctorId', isEqualTo: doctorId)
+          .where(
+            'status',
+            whereIn: [
+              'scheduled',
+              'patient_waiting',
+              'in_progress',
+              'completed',
+            ],
+          )
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Get all consultations
+        final allConsultations = snapshot.data!.docs
+            .map((doc) => VideoConsultation.fromFirestore(doc))
+            .toList();
+
+        // Separate active and completed consultations
+        final activeConsultations = allConsultations.where((c) {
+          return (c.endTime.isAfter(now) ||
+                  c.status == VideoConsultationStatus.inProgress ||
+                  c.status == VideoConsultationStatus.patientWaiting) &&
+              c.status != VideoConsultationStatus.completed;
+        }).toList();
+
+        final completedConsultations = allConsultations.where((c) {
+          return c.status == VideoConsultationStatus.completed;
+        }).toList();
+
+        if (activeConsultations.isEmpty && completedConsultations.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        activeConsultations.sort(
+          (a, b) => a.scheduledTime.compareTo(b.scheduledTime),
+        );
+
+        completedConsultations.sort(
+          (a, b) => b.scheduledTime.compareTo(a.scheduledTime),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (activeConsultations.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const VideoAppointmentsPage(isDoctor: true),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7C3AED).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.video_call_rounded,
+                            color: Color(0xFF7C3AED),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Video Consultations',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: VideoConsultationCard(
+                  consultation: activeConsultations.first,
+                  isPatient: false,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (completedConsultations.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF10B981),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Completed Consultations',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...completedConsultations
+                  .take(3)
+                  .map(
+                    (consultation) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 4,
+                      ),
+                      child: VideoConsultationCard(
+                        consultation: consultation,
+                        isPatient: false,
+                      ),
+                    ),
+                  ),
+            ],
           ],
         );
       },
@@ -1140,6 +1385,12 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
         'icon': Icons.event_available,
         'color': const Color(0xFF2D9CDB),
         'route': '/doctor/appointments',
+      },
+      {
+        'label': 'Video Consultations',
+        'icon': Icons.video_call_rounded,
+        'color': const Color(0xFF7C3AED),
+        'action': 'video_consultations',
       },
       {
         'label': 'Messages',
@@ -1171,6 +1422,13 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen>
           onTap: () {
             if (action['action'] == 'ratings') {
               _showRatingsPage(context);
+            } else if (action['action'] == 'video_consultations') {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const VideoAppointmentsPage(isDoctor: true),
+                ),
+              );
             } else if (action['action'] == 'messages') {
               final uid = FirebaseAuth.instance.currentUser?.uid;
               if (uid != null) {
@@ -3709,6 +3967,85 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
     }
   }
 
+  Future<void> _deleteAppointment(Map<String, dynamic> apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Color(0xFFEF4444), size: 24),
+            SizedBox(width: 12),
+            Text(
+              'Delete Appointment?',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete the appointment with ${apt['patientName']}? This action cannot be undone.',
+          style: const TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final appointmentId = apt['id'] as String?;
+        if (appointmentId == null) return;
+
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(appointmentId)
+            .delete();
+
+        if (mounted) {
+          setState(() {
+            widget.appointments.removeWhere((a) => a['id'] == appointmentId);
+            filteredAppointments.removeWhere((a) => a['id'] == appointmentId);
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Appointment deleted successfully'),
+                ],
+              ),
+              backgroundColor: Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting appointment: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cancelledCount = widget.appointments
@@ -3897,82 +4234,100 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
     Color statusBgColor;
     IconData statusIcon;
     LinearGradient statusGradient;
+    LinearGradient cardGradient;
 
     if (isConfirmed) {
-      statusColor = const Color(0xFF6CA67D);
-      statusBgColor = const Color(0xFF6CA67D);
+      statusColor = const Color(0xFF10B981);
+      statusBgColor = const Color(0xFF10B981);
       statusIcon = Icons.check_circle_rounded;
       statusGradient = const LinearGradient(
-        colors: [Color(0xFF6CA67D), Color(0xFF5A9369)],
+        colors: [Color(0xFF10B981), Color(0xFF059669)],
+      );
+      cardGradient = LinearGradient(
+        colors: [const Color(0xFF10B981).withOpacity(0.08), Colors.white],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       );
     } else if (isPending) {
-      statusColor = const Color(0xFFD4A574);
-      statusBgColor = const Color(0xFFD4A574);
+      statusColor = const Color(0xFFF59E0B);
+      statusBgColor = const Color(0xFFF59E0B);
       statusIcon = Icons.schedule_rounded;
       statusGradient = const LinearGradient(
-        colors: [Color(0xFFD4A574), Color(0xFFC19563)],
+        colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+      );
+      cardGradient = LinearGradient(
+        colors: [const Color(0xFFF59E0B).withOpacity(0.08), Colors.white],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       );
     } else if (isCancelled) {
-      statusColor = const Color(0xFFCB8989);
-      statusBgColor = const Color(0xFFCB8989);
+      statusColor = const Color(0xFFEF4444);
+      statusBgColor = const Color(0xFFEF4444);
       statusIcon = Icons.cancel_rounded;
       statusGradient = const LinearGradient(
-        colors: [Color(0xFFCB8989), Color(0xFFB87878)],
+        colors: [Color(0xFFF87171), Color(0xFFEF4444)],
+      );
+      cardGradient = LinearGradient(
+        colors: [const Color(0xFFEF4444).withOpacity(0.08), Colors.white],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       );
     } else {
-      statusColor = const Color(0xFF8E9EAB);
-      statusBgColor = const Color(0xFF8E9EAB);
+      statusColor = const Color(0xFF3B82F6);
+      statusBgColor = const Color(0xFF3B82F6);
       statusIcon = Icons.event_available_rounded;
       statusGradient = const LinearGradient(
-        colors: [Color(0xFF8E9EAB), Color(0xFF7A8A99)],
+        colors: [Color(0xFF60A5FA), Color(0xFF3B82F6)],
+      );
+      cardGradient = LinearGradient(
+        colors: [const Color(0xFF3B82F6).withOpacity(0.08), Colors.white],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       );
     }
 
     return Container(
       margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [statusColor.withOpacity(0.05), Colors.white],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: statusColor.withOpacity(0.3), width: 2),
+        gradient: cardGradient,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: statusColor.withOpacity(0.2), width: 2),
         boxShadow: [
           BoxShadow(
-            color: statusColor.withOpacity(0.15),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: statusColor.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         child: Column(
           children: [
             Row(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
                     gradient: statusGradient,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
                         color: statusColor.withOpacity(0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
                   child: Stack(
                     children: [
-                      Center(
+                      Positioned.fill(
                         child: Icon(
                           Icons.person_rounded,
-                          color: Colors.white.withOpacity(0.3),
-                          size: 40,
+                          color: Colors.white.withOpacity(0.25),
+                          size: 45,
                         ),
                       ),
                       Center(
@@ -3981,8 +4336,15 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
-                            fontSize: 28,
-                            letterSpacing: 0.5,
+                            fontSize: 32,
+                            letterSpacing: 0,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -3998,41 +4360,69 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
                         apt['patientName'],
                         style: const TextStyle(
                           color: Color(0xFF111827),
-                          fontSize: 17,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.5,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
-                          Icon(
-                            Icons.calendar_today_rounded,
-                            size: 14,
-                            color: const Color(0xFF6B7280),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            apt['date'],
-                            style: const TextStyle(
-                              color: Color(0xFF6B7280),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6B7280).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 13,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  apt['date'],
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Icon(
-                            Icons.access_time_rounded,
-                            size: 14,
-                            color: const Color(0xFF6B7280),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            apt['time'],
-                            style: const TextStyle(
-                              color: Color(0xFF6B7280),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6B7280).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.access_time_rounded,
+                                  size: 13,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  apt['time'],
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -4042,38 +4432,38 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                      horizontal: 14,
+                      vertical: 12,
                     ),
                     decoration: BoxDecoration(
                       gradient: statusGradient,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
                           color: statusColor.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(statusIcon, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
+                        Icon(statusIcon, color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
                         Text(
                           status.toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
+                            letterSpacing: 1.2,
                           ),
                         ),
                       ],
@@ -4082,51 +4472,68 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: statusColor.withOpacity(0.3),
-                      width: 1.5,
+                      width: 2,
                     ),
                   ),
                   child: Icon(
                     Icons.medical_information_rounded,
                     color: statusColor,
-                    size: 20,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => _deleteAppointment(apt),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444).withOpacity(0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+                      horizontal: 16,
+                      vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF10B981),
-                          const Color(0xFF059669),
-                        ],
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2E63D9), Color(0xFF1E40AF)],
                       ),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF10B981).withOpacity(0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
+                          color: const Color(0xFF2E63D9).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -4135,15 +4542,15 @@ class _AllAppointmentsPageState extends State<_AllAppointmentsPage> {
                         const Icon(
                           Icons.medical_services_rounded,
                           color: Colors.white,
-                          size: 16,
+                          size: 18,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Text(
                           apt['type'],
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
                       ],

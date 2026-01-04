@@ -295,6 +295,7 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen>
         'uid': uid,
         'firstName': firstName,
         'lastName': lastName,
+        'fullName': fullName, // Add fullName for easier querying
         'bio': _bioController.text.isEmpty ? null : _bioController.text,
         'phone': _phoneController.text,
         'specialty': currentSpecialty,
@@ -316,6 +317,24 @@ class _DoctorEditProfileScreenState extends State<DoctorEditProfileScreen>
           .collection('doctors')
           .doc(uid)
           .set(updateData, SetOptions(merge: true));
+
+      // Update doctor name in all appointments if name changed
+      if (fullName != (currentData['fullName'] ?? '')) {
+        final appointmentsSnapshot = await FirebaseFirestore.instance
+            .collection('appointments')
+            .where('doctorId', isEqualTo: uid)
+            .get();
+
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in appointmentsSnapshot.docs) {
+          batch.update(doc.reference, {'doctorName': fullName});
+        }
+
+        // Commit batch update
+        if (appointmentsSnapshot.docs.isNotEmpty) {
+          await batch.commit();
+        }
+      }
 
       setState(() {
         _successMessage = 'Profile updated successfully!';

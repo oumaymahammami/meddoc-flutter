@@ -61,8 +61,21 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                       .get(),
                   builder: (context, snap) {
                     final data = snap.data?.data() as Map<String, dynamic>?;
-                    final name =
-                        data?['name'] ?? data?['fullName'] ?? 'Patient';
+                    String name = 'Patient';
+                    if (data != null) {
+                      final nameValue = data['name'] ?? data['fullName'];
+                      if (nameValue is String) {
+                        name = nameValue;
+                      } else if (nameValue is Map) {
+                        // If it's a map, try to extract a string value
+                        name = (nameValue as Map).values
+                            .firstWhere(
+                              (v) => v is String,
+                              orElse: () => 'Patient',
+                            )
+                            .toString();
+                      }
+                    }
                     final email = data?['email'] ?? '';
                     final initials = name
                         .toString()
@@ -363,12 +376,24 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                                 ],
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => d.reference.delete(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    color: Color(0xFF2E63D9),
+                                  ),
+                                  onPressed: () => _editMedication(d),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () => _deleteMedication(d),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -673,8 +698,22 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                           String doctorName = 'Doctor';
                           if (doctorDoc.exists && doctorDoc.data() != null) {
                             final data = doctorDoc.data()!;
-                            doctorName =
-                                data['fullName'] ?? data['name'] ?? 'Doctor';
+                            // Handle different field names and ensure we get a String
+                            final nameValue =
+                                data['firstName'] ??
+                                data['fullName'] ??
+                                data['name'];
+                            if (nameValue is String) {
+                              doctorName = nameValue;
+                            } else if (nameValue is Map) {
+                              // If it's a map, try to extract a string value
+                              doctorName = (nameValue as Map).values
+                                  .firstWhere(
+                                    (v) => v is String,
+                                    orElse: () => 'Doctor',
+                                  )
+                                  .toString();
+                            }
                             print('✅ Doctor name found: $doctorName');
                           } else {
                             print('❌ No doctor document found for $_doctorId');
@@ -690,6 +729,14 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                             'prescribedBy': _doctorId,
                             'prescribedByName': doctorName,
                           });
+
+                          // Send notification to patient
+                          await _sendNotificationToPatient(
+                            type: 'medication_added',
+                            title: 'New Medication Prescribed',
+                            message:
+                                'Dr. $doctorName prescribed ${nameCtrl.text.trim()} for you',
+                          );
 
                           if (mounted) {
                             Navigator.pop(context);
@@ -1047,6 +1094,36 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                                 ),
                               ),
                               const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _editReport(sortedDocs[index]),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Edit',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF2E63D9),
+                                    side: const BorderSide(
+                                      color: Color(0xFF2E63D9),
+                                      width: 1.5,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               IconButton(
                                 onPressed: () =>
                                     _deleteReport(sortedDocs[index].id),
@@ -1269,8 +1346,24 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
 
                   if (doctorDoc.exists && doctorDoc.data() != null) {
                     final data = doctorDoc.data()!;
-                    doctorName = data['fullName'] ?? data['name'] ?? 'Doctor';
-                    specialty = data['specialty'] ?? '';
+                    // Handle different field names and ensure we get a String
+                    final nameValue =
+                        data['firstName'] ?? data['fullName'] ?? data['name'];
+                    if (nameValue is String) {
+                      doctorName = nameValue;
+                    } else if (nameValue is Map) {
+                      // If it's a map, try to extract a string value
+                      doctorName = (nameValue as Map).values
+                          .firstWhere(
+                            (v) => v is String,
+                            orElse: () => 'Doctor',
+                          )
+                          .toString();
+                    }
+                    final specialtyValue = data['specialty'];
+                    if (specialtyValue is String) {
+                      specialty = specialtyValue;
+                    }
                     print(
                       '✅ Report - Doctor name: $doctorName, Specialty: $specialty',
                     );
@@ -1290,6 +1383,14 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                         'reportType': reportType,
                         'createdAt': FieldValue.serverTimestamp(),
                       });
+
+                  // Send notification to patient
+                  await _sendNotificationToPatient(
+                    type: 'report_added',
+                    title: 'New Medical Report',
+                    message:
+                        'Dr. $doctorName added a new medical report: ${titleController.text.trim()}',
+                  );
 
                   if (mounted) {
                     Navigator.pop(context);
@@ -1462,6 +1563,14 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                     .collection('medicalReports')
                     .doc(reportId)
                     .delete();
+
+                // Send notification to patient
+                await _sendNotificationToPatient(
+                  type: 'report_deleted',
+                  title: 'Medical Report Removed',
+                  message: 'Your doctor removed a medical report',
+                );
+
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1486,6 +1595,511 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
         ],
       ),
     );
+  }
+
+  // === EDIT MEDICATION ===
+  Future<void> _editMedication(QueryDocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final nameCtrl = TextEditingController(text: data['name'] ?? '');
+    final dosageCtrl = TextEditingController(text: data['dosage'] ?? '');
+    final frequencyCtrl = TextEditingController(text: data['frequency'] ?? '');
+    final durationCtrl = TextEditingController(text: data['duration'] ?? '');
+    final instructionsCtrl = TextEditingController(
+      text: data['instructions'] ?? '',
+    );
+
+    await showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF2E63D9), Color(0xFF1E40AF)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Edit Medication',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildTextField(
+                    controller: nameCtrl,
+                    label: 'Medication Name *',
+                    hint: 'e.g., Amoxicillin',
+                    icon: Icons.medication_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: dosageCtrl,
+                    label: 'Dosage',
+                    hint: 'e.g., 500mg',
+                    icon: Icons.speed_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: frequencyCtrl,
+                    label: 'Frequency',
+                    hint: 'e.g., 3 times daily',
+                    icon: Icons.access_time_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: durationCtrl,
+                    label: 'Duration',
+                    hint: 'e.g., 7 days',
+                    icon: Icons.calendar_today_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: instructionsCtrl,
+                    label: 'Instructions',
+                    hint: 'Special instructions for the patient',
+                    icon: Icons.notes_rounded,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side: const BorderSide(
+                              color: Color(0xFF10B981),
+                              width: 2,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Color(0xFF10B981),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            if (nameCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter medication name'),
+                                  backgroundColor: Color(0xFFEF4444),
+                                ),
+                              );
+                              return;
+                            }
+
+                            await doc.reference.update({
+                              'name': nameCtrl.text.trim(),
+                              'dosage': dosageCtrl.text.trim(),
+                              'frequency': frequencyCtrl.text.trim(),
+                              'duration': durationCtrl.text.trim(),
+                              'instructions': instructionsCtrl.text.trim(),
+                            });
+
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Updated ${nameCtrl.text.trim()} successfully',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: const Color(0xFF10B981),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.check_rounded),
+                          label: const Text(
+                            'Update',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // === DELETE MEDICATION ===
+  Future<void> _deleteMedication(QueryDocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final medicationName = data['name'] ?? 'this medication';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Medication?',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: Text('Are you sure you want to delete $medicationName?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await doc.reference.delete();
+
+                // Send notification to patient
+                await _sendNotificationToPatient(
+                  type: 'medication_deleted',
+                  title: 'Medication Removed',
+                  message:
+                      'Your doctor removed $medicationName from your prescription',
+                );
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Medication deleted')),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === EDIT REPORT ===
+  Future<void> _editReport(QueryDocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final titleController = TextEditingController(text: data['title'] ?? '');
+    final contentController = TextEditingController(
+      text: data['content'] ?? '',
+    );
+    String reportType = data['reportType'] ?? 'General';
+    final reportTypes = [
+      'General',
+      'Consultation',
+      'Lab Results',
+      'Imaging',
+      'Prescription',
+      'Follow-up',
+      'Discharge Summary',
+    ];
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2E63D9), Color(0xFF1E40AF)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Edit Medical Report',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Report Type',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: reportType,
+                        isExpanded: true,
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                        items: reportTypes.map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(type),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => reportType = value);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Title',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Routine Checkup Report',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF10B981),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Report Content',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: contentController,
+                    maxLines: 8,
+                    decoration: InputDecoration(
+                      hintText: 'Enter detailed medical report...',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF10B981),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a title')),
+                  );
+                  return;
+                }
+
+                try {
+                  await doc.reference.update({
+                    'title': titleController.text.trim(),
+                    'content': contentController.text.trim(),
+                    'reportType': reportType,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Medical report updated successfully'),
+                        backgroundColor: Color(0xFF10B981),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+              icon: const Icon(Icons.save_rounded, size: 18),
+              label: const Text(
+                'Update Report',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // === SEND NOTIFICATION TO PATIENT ===
+  Future<void> _sendNotificationToPatient({
+    required String type,
+    required String title,
+    required String message,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipientId': widget.patientId,
+        'type': type,
+        'title': title,
+        'message': message,
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+    } catch (e) {
+      print('Error sending notification: $e');
+    }
   }
 
   Widget _buildNotes() {
@@ -1532,9 +2146,21 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                     return ListTile(
                       title: Text(data['title'] ?? 'Note'),
                       subtitle: Text(data['content'] ?? ''),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => d.reference.delete(),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: Color(0xFF2E63D9),
+                            ),
+                            onPressed: () => _editNote(d),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _deleteNote(d),
+                          ),
+                        ],
                       ),
                     );
                   }),
@@ -1596,9 +2222,132 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                 'createdAt': FieldValue.serverTimestamp(),
                 'updatedAt': FieldValue.serverTimestamp(),
               });
+
+              // Send notification to patient
+              await _sendNotificationToPatient(
+                type: 'note_added',
+                title: 'New Note Added',
+                message:
+                    'Your doctor added a new note: ${titleCtrl.text.trim().isEmpty ? 'Note' : titleCtrl.text.trim()}',
+              );
+
               if (mounted) Navigator.pop(context);
             },
             child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === EDIT NOTE ===
+  Future<void> _editNote(QueryDocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final titleCtrl = TextEditingController(text: data['title'] ?? '');
+    final contentCtrl = TextEditingController(text: data['content'] ?? '');
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Edit Note',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: contentCtrl,
+              decoration: const InputDecoration(labelText: 'Content'),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await doc.reference.update({
+                'title': titleCtrl.text.trim().isEmpty
+                    ? 'Note'
+                    : titleCtrl.text.trim(),
+                'content': contentCtrl.text.trim(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Note updated successfully')),
+                );
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === DELETE NOTE ===
+  Future<void> _deleteNote(QueryDocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final noteTitle = data['title'] ?? 'this note';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Note?',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: Text('Are you sure you want to delete $noteTitle?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await doc.reference.delete();
+
+                // Send notification to patient
+                await _sendNotificationToPatient(
+                  type: 'note_deleted',
+                  title: 'Note Removed',
+                  message: 'Your doctor removed a note: $noteTitle',
+                );
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Note deleted')));
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
